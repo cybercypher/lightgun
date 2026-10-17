@@ -13,8 +13,6 @@ namespace GaimeFeeder
     sealed class RawInputWindow : Form
     {
         const int WM_INPUT = 0x00FF;
-        const int WM_HOTKEY = 0x0312;
-        const int VK_F12 = 0x7B, VK_ESCAPE = 0x1B;
         const uint RID_INPUT = 0x10000003, RIDI_DEVICENAME = 0x20000007;
         const uint RIDEV_INPUTSINK = 0x100;
 
@@ -29,8 +27,6 @@ namespace GaimeFeeder
         [DllImport("user32.dll")] static extern uint GetRawInputData(IntPtr h, uint cmd, IntPtr data, ref uint size, uint hsize);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         static extern uint GetRawInputDeviceInfo(IntPtr h, uint cmd, StringBuilder b, ref uint s);
-        [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mod, uint vk);
-        [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
 
         static readonly Regex GaimePath = new Regex(
             @"VID_2E2C&PID_0631&MI_0(\d)#", RegexOptions.IgnoreCase);
@@ -39,13 +35,11 @@ namespace GaimeFeeder
         readonly Dictionary<string, IntPtr> _kbHandleBySerial = new Dictionary<string, IntPtr>();
         readonly Action<string, int, int, bool> _onPointer; // serial, x, y, tip
         readonly Action<string, int, bool> _onKey;          // serial, vkey, down
-        readonly Action<int> _onHotkey;                     // 1=F12 recal, 2=ESC quit
 
         public RawInputWindow(Action<string, int, int, bool> onPointer,
-                              Action<string, int, bool> onKey,
-                              Action<int> onHotkey)
+                              Action<string, int, bool> onKey)
         {
-            _onPointer = onPointer; _onKey = onKey; _onHotkey = onHotkey;
+            _onPointer = onPointer; _onKey = onKey;
             ShowInTaskbar = false; Opacity = 0; ShowIcon = false;
             Load += (s, e) =>
             {
@@ -55,10 +49,7 @@ namespace GaimeFeeder
                     new RAWINPUTDEVICE { Page = 0x01, Usage = 0x06, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
                     new RAWINPUTDEVICE { Page = 0x01, Usage = 0x02, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
                 }, 3, (uint)Marshal.SizeOf(typeof(RAWINPUTDEVICE)));
-                RegisterHotKey(Handle, 1, 0, VK_F12);
-                RegisterHotKey(Handle, 2, 0, VK_ESCAPE);
             };
-            FormClosed += (s, e) => { UnregisterHotKey(Handle, 1); UnregisterHotKey(Handle, 2); };
         }
 
         string DeviceName(IntPtr h)
@@ -72,11 +63,6 @@ namespace GaimeFeeder
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY)
-            {
-                _onHotkey(m.WParam.ToInt32());
-                return;
-            }
             if (m.Msg == WM_INPUT)
             {
                 uint sz = 0, hsz = (uint)Marshal.SizeOf(typeof(RAWINPUTHEADER));

@@ -23,6 +23,7 @@ namespace GaimeFeeder
         static CalibrationWindow ActiveCalib;
         static string ActiveCalibSn;
         static System.Threading.Mutex _mutex;
+        static Form MainWin; // marshals console hotkeys onto the UI thread
 
         [STAThread]
         static void Main(string[] args)
@@ -71,8 +72,9 @@ namespace GaimeFeeder
                     Console.ReadKey();
                     return;
                 }
-                var win0 = new RawInputWindow(OnPointer, OnKey, OnHotkey);
+                var win0 = new RawInputWindow(OnPointer, OnKey);
                 win0.FormClosed += (s, e) => CleanupPads();
+                MainWin = win0;
                 Console.WriteLine("Keys: T = pulse Pad 1 trigger, G = pulse Pad 2 trigger. ESC = quit.");
                 var keys0 = new System.Threading.Thread(ReadKeys) { IsBackground = true };
                 keys0.Start();
@@ -96,10 +98,11 @@ namespace GaimeFeeder
             }
             RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn());
 
-            var win = new RawInputWindow(OnPointer, OnKey, OnHotkey);
+            var win = new RawInputWindow(OnPointer, OnKey);
             win.FormClosed += (s, e) => CleanupPads();
+            MainWin = win;
             win.Load += (s, e) => CalibrateNext();
-            Console.WriteLine("Feeding. F12 = recalibrate, ESC = quit.");
+            Console.WriteLine("Feeding. F12 = recalibrate, ESC = quit (feeder console focused).");
             var keys = new System.Threading.Thread(ReadKeys) { IsBackground = true };
             keys.Start();
             StartPoll();
@@ -290,10 +293,14 @@ namespace GaimeFeeder
 
         static void ReadKeys()
         {
-            Console.WriteLine("Keys: T/G = pulse P1/P2 trigger; Arrows = pulse P1 stick; 1/2/3/4 = pulse P1 A/B/Back/Start.");
+            Console.WriteLine("Keys: T/G = pulse P1/P2 trigger; Arrows = pulse P1 stick; 1/2/3/4 = pulse P1 A/B/Back/Start. (Console focused only — game keys never reach the feeder.)");
             while (true)
             {
                 var k = Console.ReadKey(intercept: true).Key;
+                // Console keys arrive only when THIS console is focused, so game
+                // input (incl. the emulator's own ESC pause menu) can never quit us.
+                if (k == ConsoleKey.Escape) { MainWin?.BeginInvoke(new Action(() => OnHotkey(2))); continue; }
+                if (k == ConsoleKey.F12) { MainWin?.BeginInvoke(new Action(() => OnHotkey(1))); continue; }
                 var ordered = Guns.Values.OrderBy(v => v.PadIndex).ToList();
                 var g1 = ordered.ElementAtOrDefault(0);
                 var g2 = ordered.ElementAtOrDefault(1);
