@@ -186,6 +186,8 @@ namespace GaimeFeeder
 
         static void OnPointer(string sn, int x, int y, bool tip)
         {
+            try
+            {
             LatestRaw[sn] = (x, y);
             if (!Guns.TryGetValue(sn, out var g) || g.Calib == null) return;
             bool wasDown = g.TriggerDown;
@@ -209,10 +211,14 @@ namespace GaimeFeeder
                 if (sn == ActiveCalibSn) ActiveCalib.TriggerSample();
             }
             Feed(g);
+            }
+            catch (Exception ex) { Console.WriteLine($"OnPointer ERROR: {ex.GetType().Name}: {ex.Message}"); }
         }
 
         static void OnKey(string sn, int vkey, bool down)
         {
+            try
+            {
             if (!Guns.TryGetValue(sn, out var g)) return;
             // docs/buttons.md: A=SPACE(0x20), B=0x42, Coin=C(0x43), Start=Q(0x51)
             switch (vkey)
@@ -223,6 +229,8 @@ namespace GaimeFeeder
                 case 0x51: g.BtnStart = down; break;
             }
             Feed(g);
+            }
+            catch (Exception ex) { Console.WriteLine($"OnKey ERROR: {ex.GetType().Name}: {ex.Message}"); }
         }
 
         static void Feed(GunState g)
