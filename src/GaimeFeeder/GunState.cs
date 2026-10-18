@@ -39,6 +39,25 @@ namespace GaimeFeeder
             (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 /
             System.Diagnostics.Stopwatch.Frequency;
 
+        // One compare-exchange step of the fixed median-of-5 sorting network.
+        static void Order(ref int a, ref int b)
+        {
+            if (a > b) { int t = a; a = b; b = t; }
+        }
+
+        // Median of five samples: allocation-free 9-comparator network, returns
+        // the actual middle sample (no averaging, so a genuine fast sweep is not
+        // smeared toward its neighbours).
+        static int Median5(int v0, int v1, int v2, int v3, int v4)
+        {
+            Order(ref v0, ref v1); Order(ref v3, ref v4);
+            Order(ref v2, ref v4); Order(ref v2, ref v3);
+            Order(ref v0, ref v3); Order(ref v0, ref v2);
+            Order(ref v1, ref v4); Order(ref v1, ref v3);
+            Order(ref v1, ref v2);
+            return v2;
+        }
+
         // Test pulse (console keys): synthesize a trigger hold for binding capture.
         public DateTime TestTriggerUntil = DateTime.MinValue;
         // Test stick pulse: -1..1 deflection until time (999 = inactive).
@@ -47,6 +66,20 @@ namespace GaimeFeeder
         // Test buttons bitmask until time: 1=A 2=B 4=Coin(Back) 8=Start.
         public DateTime TestBtnUntil = DateTime.MinValue;
         public int TestBtnMask;
+
+        // Median-of-5 spike reject on the incoming stream. When the sensor loses
+        // screen lock the raw output sweeps the whole 0..10000 space with
+        // single-sample jumps up to ~4800 counts; a 1-2 sample glitch is outvoted
+        // by the median, while a real fast aim sweep still passes (>=3 of 5
+        // samples agree). Deliberately NOT paired with a max-jump gate: a hard
+        // per-sample jump limit cannot tell a glitch from a fast flick and would
+        // clip legitimate motion (and weapon-switch whips), so the median alone
+        // does the rejecting.
+        const int FilterN = 5;
+        readonly int[] _mx = new int[FilterN];
+        readonly int[] _my = new int[FilterN];
+        int _mi;
+        bool _filterSeeded;
 
         // Latch-and-hold: ring of pre-press positions, trigger jump is 144-810 counts.
         const int LatchN = 32;
@@ -66,12 +99,26 @@ namespace GaimeFeeder
 
         public void PushPointer(int x, int y, bool tip, bool inRange)
         {
-            RawX = x; RawY = y; InRange = inRange;
+            // Seed the filter with the first sample so Median5 is valid from the
+            // first report; seeding with zeros would drag startup aim toward 0,0.
+            if (!_filterSeeded)
+            {
+                for (int i = 0; i < FilterN; i++) { _mx[i] = x; _my[i] = y; }
+                _filterSeeded = true;
+            }
+            _mx[_mi] = x; _my[_mi] = y;
+            int fx = Median5(_mx[0], _mx[1], _mx[2], _mx[3], _mx[4]);
+            int fy = Median5(_my[0], _my[1], _my[2], _my[3], _my[4]);
+            _mi = (_mi + 1) % FilterN;
+
+            RawX = fx; RawY = fy; InRange = inRange;
             LastReport = DateTime.UtcNow;
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
             if (_lastTick != 0) LastIntervalMs = (now - _lastTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
             _lastTick = now;
-            _lx[_li] = x; _ly[_li] = y; _li = (_li + 1) % LatchN;
+            // Latch ring stores filtered positions too: the pre-press latch must
+            // not capture a glitch sample just before the trigger edge.
+            _lx[_li] = fx; _ly[_li] = fy; _li = (_li + 1) % LatchN;
 
             if (tip)
             {

@@ -25,8 +25,15 @@ namespace GaimeFeeder
         {
             if (inside)
             {
-                short ax = (short)(sx / Math.Max(1, screenW - 1) * 65535 - 32768);
-                short ay = (short)-((sy / Math.Max(1, screenH - 1)) * 65535 - 32768);
+                // Full-range map to the signed axis space. The raw expression hits
+                // exactly +32768 at sy=0 (and ax=+32768 at sx=0), which wraps to
+                // -32768 as a short (full stick-down instead of full stick-up at
+                // the top row), so clamp into the representable [-32767, 32767]
+                // before casting.
+                double axRaw = sx / Math.Max(1, screenW - 1) * 65535 - 32768;
+                double ayRaw = -((sy / Math.Max(1, screenH - 1)) * 65535 - 32768);
+                short ax = (short)Math.Clamp(axRaw, -32767, 32767);
+                short ay = (short)Math.Clamp(ayRaw, -32767, 32767);
                 _pad.SetAxisValue(Xbox360Axis.LeftThumbX, ax);
                 _pad.SetAxisValue(Xbox360Axis.LeftThumbY, ay);
             }
