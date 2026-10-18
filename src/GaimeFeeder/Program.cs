@@ -79,6 +79,7 @@ namespace GaimeFeeder
                 var keys0 = new System.Threading.Thread(ReadKeys) { IsBackground = true };
                 keys0.Start();
                 StartPoll();
+                StartHotplug();
                 Application.Run(win0);
                 return;
             }
@@ -103,9 +104,11 @@ namespace GaimeFeeder
             MainWin = win;
             win.Load += (s, e) => CalibrateNext();
             Console.WriteLine("Feeding. F12 = recalibrate, ESC = quit (feeder console focused).");
+            Console.WriteLine("Hot-plug on: plug a gun any time, it attaches within ~2 s.");
             var keys = new System.Threading.Thread(ReadKeys) { IsBackground = true };
             keys.Start();
             StartPoll();
+            StartHotplug();
             Application.Run(win);
         }
 
@@ -162,6 +165,73 @@ namespace GaimeFeeder
                         Environment.Exit(1);
                     }
                 }
+        }
+
+        // Hot-plug: launcher-first flow. The feeder snapshots guns at startup,
+        // so a gun plugged after launch was previously ignored forever. A
+        // background thread re-enumerates sns every 2 s; newcomers attach on
+        // the UI thread (cal windows + RawInput map are UI-thread affine).
+        // Binding-mode pads (bind1/bind2) are dropped when the first real gun
+        // arrives so XInput slots stay 1:1 with guns. Removal needs no action:
+        // the GunState stays, its pad just stops receiving reports.
+        static void StartHotplug()
+        {
+            var t = new System.Threading.Thread(() =>
+            {
+                while (true)
+                {
+                    System.Threading.Thread.Sleep(2000);
+                    List<string> sns;
+                    try { sns = HidIdentity.EnumerateGunSns(); }
+                    catch { continue; }
+                    List<string> fresh = null;
+                    lock (Guns)
+                        fresh = sns.Where(s => !Guns.ContainsKey(s)).ToList();
+                    try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); }
+                    catch { }
+                    if (fresh.Count == 0) continue;
+                    try { MainWin?.BeginInvoke(new Action(() => AttachGuns(fresh))); }
+                    catch { }
+                }
+            })
+            { IsBackground = true };
+            t.Start();
+        }
+
+        static void AttachGuns(List<string> sns)
+        {
+            // Runs on the UI thread (see StartHotplug BeginInvoke).
+            bool dropped = false;
+            foreach (var b in new[] { "bind1", "bind2" })
+            {
+                if (Guns.ContainsKey(b))
+                {
+                    Guns.Remove(b);
+                    LatestRaw.Remove(b);
+                    if (Pads.TryGetValue(b, out var p))
+                    {
+                        try { p.Dispose(); } catch { }
+                        Pads.Remove(b);
+                    }
+                    dropped = true;
+                }
+            }
+            if (dropped) Console.WriteLine("Gun detected: binding-mode pads dropped.");
+            var allKnown = Guns.Keys.Concat(sns).Distinct().ToList();
+            var numbering = GunMap.Load(allKnown);
+            foreach (var s in sns)
+            {
+                if (Guns.ContainsKey(s)) continue;
+                int n = numbering.TryGetValue(s, out var nn) ? nn : 1;
+                Guns[s] = new GunState(s, n, $"Gun {n} (sn{s})");
+                LatestRaw[s] = (5000, 5000);
+                var c = RectCalib.Load(s);
+                if (c == null) PendingCalib.Enqueue(s);
+                else Guns[s].Calib = c;
+                Console.WriteLine($"Hot-plug: attached {Guns[s].Label} (cal {(c == null ? "needed - aim + trigger" : "loaded")}).");
+            }
+            try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
+            CalibrateNext();
         }
 
         static void OnHotkey(int id)
@@ -316,7 +386,8 @@ namespace GaimeFeeder
                 // input (incl. the emulator's own ESC pause menu) can never quit us.
                 if (k == ConsoleKey.Escape) { MainWin?.BeginInvoke(new Action(() => OnHotkey(2))); continue; }
                 if (k == ConsoleKey.F12) { MainWin?.BeginInvoke(new Action(() => OnHotkey(1))); continue; }
-                var ordered = Guns.Values.OrderBy(v => v.PadIndex).ToList();
+                List<GunState> ordered;
+                lock (Guns) ordered = Guns.Values.OrderBy(v => v.PadIndex).ToList();
                 var g1 = ordered.ElementAtOrDefault(0);
                 var g2 = ordered.ElementAtOrDefault(1);
                 if ((k == ConsoleKey.T || k == ConsoleKey.G) && (k == ConsoleKey.T ? g1 : g2) is GunState gt)
