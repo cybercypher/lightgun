@@ -335,9 +335,16 @@ namespace GaimeTray
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetCursorPos(int X, int Y);
 
+        // Cursor quarantine: the gun is a system touchscreen, so Windows drives
+        // the OS cursor straight from it. Slow reports (<60 Hz) are idle/desk
+        // wander (thousands of counts of garbage) — park the cursor at (0,0)
+        // so stray clicks land on empty desktop. A fast aimed stream (~265 Hz)
+        // is left alone so the cursor tracks aim (service menu etc).
+        // Freshness gate: only park on a live report, never strand the cursor.
         void Quarantine(GunState g)
         {
-            if (g.LastIntervalMs < 25) SetCursorPos(0, 0);
+            if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
+            if (g.LastIntervalMs > 1000.0 / 60.0) SetCursorPos(0, 0);
         }
 
         static string LogDir()

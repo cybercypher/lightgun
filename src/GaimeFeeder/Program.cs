@@ -292,15 +292,16 @@ namespace GaimeFeeder
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetCursorPos(int X, int Y);
 
-        // Cursor quarantine: the gun is a system touchscreen, so aiming drags
-        // the OS cursor and trigger clicks land wherever it sits (dialogs
-        // die, windows close). While a gun streams fast (in hand, aimed at the
-        // screen: ~265 Hz vs ~12 Hz desk-idle) park the cursor at (0,0) so stray
-        // clicks land on empty desktop. Desk-idle guns don't trigger this, so
-        // the real mouse stays usable. Aim truth remains xcheck/feeder logs.
+        // Cursor quarantine: the gun is a system touchscreen, so Windows drives
+        // the OS cursor straight from it. Slow reports (<60 Hz) are idle/desk
+        // wander (thousands of counts of garbage) — park the cursor at (0,0)
+        // so stray clicks land on empty desktop. A fast aimed stream (~265 Hz)
+        // is left alone so the cursor tracks aim (service menu etc).
+        // Freshness gate: only park on a live report, never strand the cursor.
         static void QuarantineCursor(GunState g)
         {
-            if (g.LastIntervalMs < 25) SetCursorPos(0, 0);
+            if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
+            if (g.LastIntervalMs > 1000.0 / 60.0) SetCursorPos(0, 0);
         }
 
         static void OnKey(string sn, int vkey, bool down)
