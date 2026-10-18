@@ -1,3 +1,6 @@
 logs/*.log
+logs/capture-*.txt
 src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
+src/GaimeTray/bin/
+src/GaimeTray/obj/

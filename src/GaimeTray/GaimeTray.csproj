@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>GaimeTray</AssemblyName>
+    <RootNamespace>GaimeTray</RootNamespace>
+    <!-- 0649: GunState test-pulse fields are assigned by the feeder, not the tray -->
+    <NoWarn>$(NoWarn);0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Xbox360 pads J1/J2. Requires ViGEmBus installed (same as the feeder). -->
+    <PackageReference Include="Nefarius.ViGEm.Client" Version="1.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reuse the proven feeder engine unchanged. Program.cs is NOT linked:
+         orchestration lives in FeederEngine.cs (instance-based, UI events). -->
+    <Compile Include="..\GaimeFeeder\GunState.cs" Link="Engine\GunState.cs" />
+    <Compile Include="..\GaimeFeeder\GunMap.cs" Link="Engine\GunMap.cs" />
+    <Compile Include="..\GaimeFeeder\RectCalib.cs" Link="Engine\RectCalib.cs" />
+    <Compile Include="..\GaimeFeeder\VigemPad.cs" Link="Engine\VigemPad.cs" />
+    <Compile Include="..\GaimeFeeder\HidIdentity.cs" Link="Engine\HidIdentity.cs" />
+    <Compile Include="..\GaimeFeeder\RawInput.cs" Link="Engine\RawInput.cs" />
+    <Compile Include="..\GaimeFeeder\CalibrationWindow.cs" Link="Engine\CalibrationWindow.cs" />
+  </ItemGroup>
+
+</Project>
