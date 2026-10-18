@@ -34,9 +34,9 @@ User asked that Tekno UI items be called **buttons**, not rows.
   cursor lands where aimed; desktop/Paint tracking correct; fresh
   `cal_11111.json` full-span, InvertY=false).
 - **Service/test**: `[JVS] TestMode=true` boots the service menu (current ini
-  state!). TC3 operator manual retrieved (`/tmp/opencode/tc3manual.pdf` —
-  NOT in repo; the "pdf parser failed" error user saw was a failed direct
-  fetch, superseded). Manual facts: coin-door Select Up/Down + Enter are
+  state!). TC3 operator manual facts kept as text in
+  `docs/tc3_manual_notes.md` (source PDF deleted — it kept tripping a
+  harness PDF-parser error). Manual facts: coin-door Select Up/Down + Enter are
   PHYSICAL switches; GUN INITIALIZE shortcut = hold Service while Test
   turns on; gun adjust = shoot markers, pedal/Service to adjust, Enter exits;
   OTHERS → BACKUP MEMORY INITIALIZE = factory reset incl. gun sights;
