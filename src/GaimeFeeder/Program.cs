@@ -214,8 +214,23 @@ namespace GaimeFeeder
                 if (sn == ActiveCalibSn) ActiveCalib.TriggerSample();
             }
             Feed(g);
+            QuarantineCursor(g);
             }
             catch (Exception ex) { Console.WriteLine($"OnPointer ERROR: {ex.GetType().Name}: {ex.Message}"); }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool SetCursorPos(int X, int Y);
+
+        // Cursor quarantine: the gun is a system touchscreen, so aiming drags
+        // the OS cursor and trigger clicks land wherever it sits (dialogs
+        // die, windows close). While a gun streams fast (in hand, aimed at the
+        // screen: ~265 Hz vs ~12 Hz desk-idle) park the cursor at (0,0) so stray
+        // clicks land on empty desktop. Desk-idle guns don't trigger this, so
+        // the real mouse stays usable. Aim truth remains xcheck/feeder logs.
+        static void QuarantineCursor(GunState g)
+        {
+            if (g.LastIntervalMs < 25) SetCursorPos(0, 0);
         }
 
         static void OnKey(string sn, int vkey, bool down)

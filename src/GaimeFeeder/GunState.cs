@@ -28,6 +28,9 @@ namespace GaimeFeeder
         long _tipOffT0;
         public bool TriggerDown;
         public DateTime TriggerEdge;
+        // Report-rate tracking for cursor quarantine (see QuarantineCursor).
+        long _lastTick;
+        public double LastIntervalMs = 1000;
         public double LastPressSpanMs;
         public double LastReleaseQuietMs;
         public int LastBlip;
@@ -65,6 +68,9 @@ namespace GaimeFeeder
         {
             RawX = x; RawY = y; InRange = inRange;
             LastReport = DateTime.UtcNow;
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (_lastTick != 0) LastIntervalMs = (now - _lastTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            _lastTick = now;
             _lx[_li] = x; _ly[_li] = y; _li = (_li + 1) % LatchN;
 
             if (tip)
