@@ -332,10 +332,12 @@ namespace GaimeTray
                     if (k == null) return;
                     if (on)
                     {
-                        string dll = System.Reflection.Assembly
-                            .GetExecutingAssembly().Location;
-                        k.SetValue("GaimeTray",
-                            "\"C:\\Program Files\\dotnet\\dotnet.exe\" \"" + dll + "\"");
+                        // Point at the windowed apphost exe, NOT dotnet.exe:
+                        // dotnet <dll> opens a console window.
+                        string exe = Environment.ProcessPath;
+                        if (exe.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                            exe = Path.ChangeExtension(exe, ".exe");
+                        k.SetValue("GaimeTray", "\"" + exe + "\"");
                     }
                     else k.DeleteValue("GaimeTray", false);
                 }
