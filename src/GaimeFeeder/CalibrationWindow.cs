@@ -45,7 +45,7 @@ namespace GaimeFeeder
             };
             cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancel);
-            MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) TakeSample(); };
+            MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) TriggerSample(); };
             Shown += (s, e) => { Rebuild(); Activate(); };
         }
 
@@ -82,7 +82,16 @@ namespace GaimeFeeder
         }
 
         // Called by the feeder when this gun's debounced trigger fires.
-        public void TriggerSample() => TakeSample();
+        // Time-gated: one physical pull produces TWO events (debounced tip edge
+        // + the Windows touch-click from the digitizer acting as a touchscreen),
+        // plus tip flutter re-edges. Accept at most one sample per 750 ms.
+        DateTime _lastSample = DateTime.MinValue;
+        public void TriggerSample()
+        {
+            if ((DateTime.UtcNow - _lastSample).TotalMilliseconds < 750) return;
+            _lastSample = DateTime.UtcNow;
+            TakeSample();
+        }
 
         void TakeSample()
         {
