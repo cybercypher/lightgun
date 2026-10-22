@@ -8,31 +8,39 @@ input; don't add admin requirements.
 
 ## 0. READ FIRST — blocking items
 
-1. **The watchdog currently deployed on gun sn11111 is the BUGGY build.**
-   The first version replaced each `/app/*.log` with a symlink but never created
-   the target in `/tmp/logs`, so the links dangled and `gun` died on its log
-   write (this is exactly what happened after the first reboot).
-   It is masked right now because `/tmp/logs` + the targets were created by
-   hand. **On the next boot, `/tmp` is wiped → same failure again.**
-   The fixed build is committed at `tools/gun/logs_watchdog.sh` — 2,078 bytes,
-   md5 `e214ca10316b0f42780d6d917ff6ae07` (on-gun copy is the old 1,661-byte
-   build, md5 `ca0257c0…`). The patched launcher is `tools/gun/app.sh`
-   (md5 `b314d89b7c8b6730ea5aa6a9b02ba5b0`, already on the gun).
+1. ~~The watchdog currently deployed on gun sn11111 is the BUGGY build.~~
+   **DONE 2026-10-22 — rev 2 deployed and verified on the gun (sn11111,
+   md5 `3c93094a909bc4af142ea3a953d80d0d`, 3,399 B).**
 
-   **Ready-to-run repair** (one command, uploads + md5-verifies + replaces):
+   History: rev 1 (2,078 B, `e214ca10…`) added `mkdir -p /tmp/logs` and created a
+   target before each new symlink, but it only converted *real* files — on every
+   boot after the first, `/app/*.log` are already symlinks while `/tmp` is fresh,
+   so it skipped them and left all links dangling. Rev 2 recreates the missing
+   target for existing symlinks at startup **and** once a minute, and its 5 MB
+   cleanup now only counts non-empty logs (the empty recreated targets are always
+   the newest mtime and were pushing the real logs out of the keep-2 window).
+
+   Verified live by wiping `/tmp/logs` with the daemon running: all 9 targets
+   were recreated, `/app/*.log` all resolve, and a feeder `--list` produced a new
+   heartbeat line in `/tmp/logs/19700401.log` (86 B) — i.e. the daemon's log
+   write still succeeds through the symlink.
+
+   Still worth doing once: `sync; reboot` and confirm at boot —
+   - `ls -la /app/*.log` → every entry is `-> /tmp/logs/<name>` and resolves
+   - `ls -la /tmp/logs` → targets exist (not dangling)
+   - `ps w` → `gun` and `{logs_watchdog.s}` both present
+   - `df -h /app` → well under 100%
+
+   Redeploy, if ever needed (uploads + md5-verifies + `mv` replaces atomically):
    ```
    powershell.exe -NoProfile -ExecutionPolicy Bypass `
      -File \\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\Upload-GunFile.ps1 `
      -LocalPath \\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\gun\logs_watchdog.sh `
      -RemotePath /app/shell/logs_watchdog.sh -Port COM4
    ```
-   Then `sync; reboot` over the same console and verify, on the fresh boot:
-   - `ls -la /app/*.log` → every entry is `-> /tmp/logs/<name>`
-   - `ls -la /tmp/logs` → the targets exist (not a dangling link)
-   - `ps w` → `gun` and `{logs_watchdog.s}` both present
-   - `df -h /app` → well under 100%
-   If the app is dead after the boot, that ordering (targets before links) is
-   the first thing to check.
+   If the app is ever dead after a boot, check link targets first.
+   The patched launcher is `tools/gun/app.sh`
+   (md5 `b314d89b7c8b6730ea5aa6a9b02ba5b0`, already on the gun).
 2. ~~Feeder poll rate is still 2 s.~~ **DONE** — rescan is now 10 s via
    `HotplugRescanMs` in `src/GaimeFeeder/Program.cs` and
    `src/GaimeTray/FeederEngine.cs`, built 0/0, committed (`83fafa4`) and
@@ -340,7 +348,7 @@ app_backup2.tgz 1,305,603 B  364dab9b3cb5532481076c9ae88c6080   superseded bad c
 old_logs.tgz       71,609 B  72fd7ba9efe951b2ff345718e509d57e   three stale logs, bit-verified
 old_logs/                    extracted copies of the above
 app.sh.new          1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (= on gun)
-logs_watchdog.sh    2,078 B  e214ca10316b0f42780d6d917ff6ae07   local copy (deployable is tools/gun/)
+logs_watchdog.sh    3,399 B  3c93094a909bc4af142ea3a953d80d0d   local copy (deployable is tools/gun/; rev 2)
 tools/gun/app.sh    1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (already on gun)
 ```
 
@@ -352,11 +360,11 @@ deleted.
 
 ## 7. Next steps, in order
 
-1. **Re-upload the fixed `logs_watchdog.sh`** — the exact command is in §0.
-   Then reboot once and confirm on boot:
-   - `/app/*.log` are symlinks whose targets exist under `/tmp/logs`
-   - `ps w` shows `gun` and `logs_watchdog.sh`
-   - `/app` well under 100%
+1. ~~Re-upload the fixed `logs_watchdog.sh`~~ **DONE 2026-10-22** — rev 2
+   (`3c93094a…`, 3,399 B) deployed and md5-verified on the gun, then verified by
+   wiping `/tmp/logs` with the daemon running (all targets recreated, links
+   resolve, a new heartbeat written to tmpfs). Still outstanding: one real
+   `reboot` to confirm `app.sh` starts it early enough at boot.
 2. ~~Slow the feeder hotplug poll~~ **DONE** — 2 s → 10 s via
    `HotplugRescanMs` in `src/GaimeFeeder/Program.cs` and
    `src/GaimeTray/FeederEngine.cs` (build 0/0; committed `83fafa4`; deployed).
