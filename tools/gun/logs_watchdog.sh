@@ -17,60 +17,66 @@
 # Reversible: everything this script changes is inside /app (file-tree only);
 # logs/gunref/app_backup.tgz is the bit-verified restore point.
 #
-# rev 2 (2026-10-22): on every boot after the first, /app/*.log are already
-# symlinks while /tmp is fresh, so the targets are missing again. Rev 1 skipped
-# symlinks entirely and left those links dangling; a log write that fails kills
-# the whole app layer, so the targets are now recreated here (both at startup and
-# once a minute, in case /tmp/logs is ever lost while running).
+# Revision history:
+#   rev 1  first fix: mkdir /tmp/logs, target created before each new symlink.
+#          Only converted real files once at startup, and only created targets
+#          for the files it converted.
+#   rev 2  recreate missing targets for links that already exist (every boot
+#          after the first starts with symlinks and an empty /tmp); cleanup
+#          ignores empty logs so the empty targets do not win the keep-2 window.
+#   rev 3  the scan runs every minute, not just at startup. The gun's RTC is
+#          bogus and jumps on each boot, so it creates a NEW day log shortly
+#          after boot - after rev 1/2 had finished their one-shot scan. That
+#          live file stayed on flash and grew unbounded (seen on 2026-10-22:
+#          19700402.log + 19700403.log real files after a reboot).
+#
+# Safe to convert a log the daemon is using: gun opens/writes/closes its log per
+# event and holds no log fd open (checked on the gun 2026-10-22 - fds 0/1/2 are
+# /dev/null, no fd points at /app/*.log), so the next write simply follows the
+# new symlink into tmpfs.
 
 LOG_SRC_DIR=/app
 LOG_DST_DIR=/tmp/logs
 
-# /tmp is a fresh tmpfs every boot, and the /app entries are already symlinks
-# from a previous run -- so the destination dir and every target file MUST be
-# created before the links can resolve, or the daemon's log write hits a
-# dangling link and the whole app layer dies (observed 2026-10-21).
-mkdir -p "${LOG_DST_DIR}"
-
-# ensure_link_targets: for every /app/*.log that is already a symlink into tmpfs,
-# make sure the target file exists. `[ -e "$f" ]` is false for a dangling link,
-# so `: > "$f"` creates the target through it; an existing target is untouched
-# (never truncated), so a live log is safe to re-check while the daemon appends.
-ensure_link_targets() {
-    for f in ${LOG_SRC_DIR}/*.log; do
-        [ -L "$f" ] || continue
-        [ -e "$f" ] || : > "$f"
-    done
-}
-
-# Path 1: move /app's real log files into tmpfs, replacing them with symlinks.
-# Idempotent: symlinks from an earlier boot just get their target recreated, and
-# a real file is only converted once (target created BEFORE the link).
-ls -1 ${LOG_SRC_DIR}/*.log 2>/dev/null | while read f; do
+# sync_one: make one /app/<n>.log tmpfs-backed. A real file is replaced by a
+# symlink (target created first, always); a symlink just gets its target
+# recreated if it is dangling. Never truncates an existing target, so a live
+# log is safe to re-check.
+sync_one() {
+    f=$1
     n=$(basename "$f")
     if [ -L "$f" ]; then
         [ -e "$f" ] || : > "$f"
-        continue
+        return
     fi
+    [ -f "$f" ] || return
     : > "${LOG_DST_DIR}/${n}"
     rm -f "$f"
-    ln -sf "${LOG_DST_DIR}/${n}" "${LOG_SRC_DIR}/${n}"
-done
+    ln -sf "${LOG_DST_DIR}/${n}" "$f"
+}
 
-# Path 2: keep the link targets alive + size-triggered cleanup, threshold 5 MB
-# (tmpfs has 27.5 MB to work with).
+sync_logs() {
+    for f in ${LOG_SRC_DIR}/*.log; do
+        [ -e "$f" ] || [ -L "$f" ] || continue
+        sync_one "$f"
+    done
+}
+
+mkdir -p "${LOG_DST_DIR}"
+sync_logs
+
 while true; do
     [ -d "${LOG_DST_DIR}" ] || mkdir -p "${LOG_DST_DIR}"
     total=$(du -sk ${LOG_DST_DIR} 2>/dev/null | cut -f1)
     if [ -n "$total" ] && [ "$total" -gt 5000 ]; then
-        # keep the 2 newest logs, delete the rest. Only non-empty files count:
-        # the empty targets recreated below are always the newest mtime and
-        # would otherwise push the real logs out and get them deleted.
+        # keep the 2 newest non-empty logs, delete the rest. Empty files are
+        # excluded: the empty targets recreated by sync_logs are always the
+        # newest mtime and would otherwise push the real logs out.
         ls -tr ${LOG_DST_DIR}/*.log 2>/dev/null | while read f; do
             [ -s "$f" ] && echo "$f"
         done | head -n -2 | xargs -r rm -f
     fi
-    # after a cleanup (or if /tmp/logs vanished) the links would dangle again
-    ensure_link_targets
+    # also catches a new day log created after boot, and re-alives targets
+    sync_logs
     sleep 60
 done

@@ -9,27 +9,32 @@ input; don't add admin requirements.
 ## 0. READ FIRST — blocking items
 
 1. ~~The watchdog currently deployed on gun sn11111 is the BUGGY build.~~
-   **DONE 2026-10-22 — rev 2 deployed and verified on the gun (sn11111,
-   md5 `3c93094a909bc4af142ea3a953d80d0d`, 3,399 B).**
+   **DONE 2026-10-22 — rev 3 deployed, rebooted and verified on the gun
+   (sn11111, md5 `add0903fcd17aed4fca21e75b928b0b5`, 3,354 B).**
 
-   History: rev 1 (2,078 B, `e214ca10…`) added `mkdir -p /tmp/logs` and created a
-   target before each new symlink, but it only converted *real* files — on every
-   boot after the first, `/app/*.log` are already symlinks while `/tmp` is fresh,
-   so it skipped them and left all links dangling. Rev 2 recreates the missing
-   target for existing symlinks at startup **and** once a minute, and its 5 MB
-   cleanup now only counts non-empty logs (the empty recreated targets are always
-   the newest mtime and were pushing the real logs out of the keep-2 window).
+   History:
+   - rev 1 (2,078 B, `e214ca10…`) added `mkdir -p /tmp/logs` and created a
+     target before each new symlink, but it only converted *real* files — on
+     every boot after the first, `/app/*.log` are already symlinks while `/tmp`
+     is fresh, so it skipped them and left all links dangling.
+   - rev 2 (`3c93094a…`, 3,399 B) recreated missing targets for existing
+     symlinks and made the 5 MB cleanup ignore empty logs (the empty targets are
+     always the newest mtime and were pushing the real logs out of the keep-2
+     window). Still failed one case, found on its first real reboot: the scan
+     ran only at startup, and the gun's RTC is bogus and jumps on every boot, so
+     it creates a **new** `/app/<day>.log` shortly *after* the scan. That live
+     file stayed on flash — `19700402.log` + `19700403.log` were real files after
+     the reboot.
+   - rev 3 (current) runs the scan every 60 s, so a day log created at any time
+     is converted on the next pass.
 
-   Verified live by wiping `/tmp/logs` with the daemon running: all 9 targets
-   were recreated, `/app/*.log` all resolve, and a feeder `--list` produced a new
-   heartbeat line in `/tmp/logs/19700401.log` (86 B) — i.e. the daemon's log
-   write still succeeds through the symlink.
-
-   Still worth doing once: `sync; reboot` and confirm at boot —
-   - `ls -la /app/*.log` → every entry is `-> /tmp/logs/<name>` and resolves
-   - `ls -la /tmp/logs` → targets exist (not dangling)
+   Verified on the gun after a real `sync; reboot`:
+   - `/app/*.log` → all 11 entries are `-> /tmp/logs/<name>` and resolve
+   - `/tmp/logs` → targets exist (not dangling); one heartbeat from a feeder
+     `--list` landed in `/tmp/logs/19700403.log` through the link
+   - planted a real `/app/19700404.log`; it became a symlink within one 60 s pass
    - `ps w` → `gun` and `{logs_watchdog.s}` both present
-   - `df -h /app` → well under 100%
+   - `df -h /app` → 41% used, 2.2 MB free
 
    Redeploy, if ever needed (uploads + md5-verifies + `mv` replaces atomically):
    ```
@@ -348,7 +353,7 @@ app_backup2.tgz 1,305,603 B  364dab9b3cb5532481076c9ae88c6080   superseded bad c
 old_logs.tgz       71,609 B  72fd7ba9efe951b2ff345718e509d57e   three stale logs, bit-verified
 old_logs/                    extracted copies of the above
 app.sh.new          1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (= on gun)
-logs_watchdog.sh    3,399 B  3c93094a909bc4af142ea3a953d80d0d   local copy (deployable is tools/gun/; rev 2)
+logs_watchdog.sh    3,354 B  add0903fcd17aed4fca21e75b928b0b5   local copy (deployable is tools/gun/; rev 3)
 tools/gun/app.sh    1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (already on gun)
 ```
 
@@ -360,11 +365,11 @@ deleted.
 
 ## 7. Next steps, in order
 
-1. ~~Re-upload the fixed `logs_watchdog.sh`~~ **DONE 2026-10-22** — rev 2
-   (`3c93094a…`, 3,399 B) deployed and md5-verified on the gun, then verified by
-   wiping `/tmp/logs` with the daemon running (all targets recreated, links
-   resolve, a new heartbeat written to tmpfs). Still outstanding: one real
-   `reboot` to confirm `app.sh` starts it early enough at boot.
+1. ~~Re-upload the fixed `logs_watchdog.sh`~~ **DONE 2026-10-22** — rev 3
+   (`add0903f…`, 3,354 B) deployed and md5-verified, then a real `sync; reboot`
+   confirmed the boot path: all `/app/*.log` symlinks resolve, targets exist in
+   `/tmp/logs`, `gun` and the watchdog are running, `/app` at 41%. A planted real
+   day log was converted within one 60 s pass (this is the case rev 2 missed).
 2. ~~Slow the feeder hotplug poll~~ **DONE** — 2 s → 10 s via
    `HotplugRescanMs` in `src/GaimeFeeder/Program.cs` and
    `src/GaimeTray/FeederEngine.cs` (build 0/0; committed `83fafa4`; deployed).
@@ -388,6 +393,10 @@ deleted.
   sure the write succeeds — never `chmod`/`chattr`/read-only the log path.
 - **Create the symlink target before linking** (see §0). Dangling links are
   worse than a full disk: they fail instantly and silently.
+- **The gun's RTC is bogus and jumps on every boot**, so it creates a *new*
+  `/app/<day>.log` shortly after boot. A one-shot startup scan of `/app/*.log`
+  misses that file and the live log grows on flash again — the watchdog must
+  re-scan periodically (rev 3 does, every 60 s).
 - **`/app` is only 3.9 MB.** `du` of the file tree can look far smaller than
   `df` usage (metadata/drift); `e2fsck -n` is the read-only check.
 - **A gun with a dead app layer is invisible to the feeder** — `HidIdentity`
