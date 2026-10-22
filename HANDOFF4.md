@@ -33,38 +33,22 @@ input; don't add admin requirements.
    - `df -h /app` → well under 100%
    If the app is dead after the boot, that ordering (targets before links) is
    the first thing to check.
-2. **Feeder poll rate is still 2 s.** The "do 1 then 2" request (slow the
-   hotplug rescan, then commit) was interrupted by this handoff. Not done yet.
-3. **Everything in the repo is uncommitted.** See §1 and §7.
+2. ~~Feeder poll rate is still 2 s.~~ **DONE** — rescan is now 10 s via
+   `HotplugRescanMs` in `src/GaimeFeeder/Program.cs` and
+   `src/GaimeTray/FeederEngine.cs`, built 0/0, committed (`83fafa4`) and
+   redeployed to `C:\games\feeder`.
+3. ~~Everything in the repo is uncommitted.~~ **DONE** — committed as
+   `83fafa4` (feeder + deployment) and `b3ce325` (gun watchdog + uploader);
+   working tree clean. `logs/gunref/` is gitignored; reference/deployable gun
+   files live in `tools/gun/`.
 
 ---
 
-## 1. Repo task (instructions.txt) — implemented, builds clean, UNCOMMITTED
+## 1. Repo task (instructions.txt) — implemented, committed, builds clean
 
-`git status` at handoff time:
-
-```
- M README.md
- M docs/buttons.md
- M src/GaimeFeeder/GunMap.cs
- M src/GaimeFeeder/GunState.cs
- M src/GaimeFeeder/Program.cs
- M src/GaimeFeeder/RawInput.cs
- M src/GaimeFeeder/RectCalib.cs
- M src/GaimeFeeder/VigemPad.cs
- M src/GaimeFeeder/XCheck.cs
- M src/GaimeTray/FeederEngine.cs
- M src/GaimeTray/GaimeTray.csproj
- M src/GaimeTray/MainForm.cs
- M tools/Feeder.ps1
- M tools/Launch-Guns.cmd
- M tools/Launch-Tray.cmd
- M tools/XCheck.ps1
-?? instructions.txt
-?? logs/gunref/            <-- vendor binaries + backups; see §7 (gitignore it)
-?? src/GaimeFeeder/AppPaths.cs
-?? tools/Deploy-Feeder.ps1
-```
+Committed as **`83fafa4`** (this task + deployment) and **`b3ce325`** (gun-side
+watchdog + uploader). Working tree clean at handoff. `logs/gunref/` is
+gitignored; `instructions.txt` was committed with the spec.
 
 What changed (all four instructions.txt items done):
 
@@ -356,7 +340,7 @@ app_backup2.tgz 1,305,603 B  364dab9b3cb5532481076c9ae88c6080   superseded bad c
 old_logs.tgz       71,609 B  72fd7ba9efe951b2ff345718e509d57e   three stale logs, bit-verified
 old_logs/                    extracted copies of the above
 app.sh.new          1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (= on gun)
-logs_watchdog.sh    2,078 B  e214ca10316b0f42780d6d917ff6ae07   FIXED build — needs upload
+logs_watchdog.sh    2,078 B  e214ca10316b0f42780d6d917ff6ae07   local copy (deployable is tools/gun/)
 tools/gun/app.sh    1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (already on gun)
 ```
 
@@ -373,18 +357,13 @@ deleted.
    - `/app/*.log` are symlinks whose targets exist under `/tmp/logs`
    - `ps w` shows `gun` and `logs_watchdog.sh`
    - `/app` well under 100%
-2. **Slow the feeder hotplug poll** (2 s → 10 s) in
-   `src/GaimeFeeder/Program.cs` (~line 186) and
-   `src/GaimeTray/FeederEngine.cs` (~line 275); update the two "attaches in
-   ~2 s" strings and comments. Then rebuild (expect 0/0) and redeploy.
+2. ~~Slow the feeder hotplug poll~~ **DONE** — 2 s → 10 s via
+   `HotplugRescanMs` in `src/GaimeFeeder/Program.cs` and
+   `src/GaimeTray/FeederEngine.cs` (build 0/0; committed `83fafa4`; deployed).
    This is defence-in-depth now that logs live in tmpfs.
-3. **Commit the repo.** Suggested split:
-   - feeder changes (Changes 1-4 + AppPaths + deploy tooling + README/buttons)
-   - add `logs/gunref/` to `.gitignore` (it holds vendor binaries and large
-     backups; the current rules only cover `logs/*.log` and
-     `logs/capture-*.txt`) **or** move the reference copies somewhere
-     intentionally committed. Do not commit vendor binaries by accident.
-   - decide whether `instructions.txt` is kept (it is untracked today).
+3. ~~Commit the repo~~ **DONE** — `83fafa4` (feeder + deployment) and
+   `b3ce325` (gun watchdog + uploader). `logs/gunref/` is gitignored; the
+   reference and deployable gun files are in `tools/gun/`.
 4. Optional, still open: hash `/dev/nandblk2` on both guns to compare the
    actual rootfs; investigate the `ISP0 select timeout` reset loop; a one-time
    `e2fsck -f /dev/block/app` (needs `/app` unmounted) if space accounting
