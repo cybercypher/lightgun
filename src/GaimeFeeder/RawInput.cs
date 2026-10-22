@@ -23,10 +23,21 @@ namespace GaimeFeeder
         [StructLayout(LayoutKind.Sequential)]
         struct RAWHID { public uint Count; public uint SizeHid; }
 
+        [StructLayout(LayoutKind.Sequential)]
+        struct POINT { public int X, Y; }
+
         [DllImport("user32.dll")] static extern bool RegisterRawInputDevices(RAWINPUTDEVICE[] d, uint n, uint s);
         [DllImport("user32.dll")] static extern uint GetRawInputData(IntPtr h, uint cmd, IntPtr data, ref uint size, uint hsize);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         static extern uint GetRawInputDeviceInfo(IntPtr h, uint cmd, StringBuilder b, ref uint s);
+        [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+
+        // Cursor bodyguard anchor (Change 4): the guns are digitizer + keyboard
+        // and never expose a mouse, so every RawInput mouse is the user's real
+        // mouse. Snapshot the OS cursor whenever one moves; the bodyguard
+        // restores the cursor to this point while a gun idles (see Program).
+        public static int MouseX, MouseY;
+        public static volatile bool HaveMousePos;
 
         static readonly Regex GaimePath = new Regex(
             @"VID_2E2C&PID_0631&MI_0(\d)#", RegexOptions.IgnoreCase);
@@ -75,32 +86,45 @@ namespace GaimeFeeder
                         if (GetRawInputData(m.LParam, RID_INPUT, buf, ref sz, hsz) == sz)
                         {
                             var hdr = (RAWINPUTHEADER)Marshal.PtrToStructure(buf, typeof(RAWINPUTHEADER));
-                            string name = DeviceName(hdr.Dev);
-                            var gm = GaimePath.Match(name);
-                            if (gm.Success)
+                            if (hdr.Type == 0)
                             {
-                                if (hdr.Type == 2) // digitizer
+                                // Real mouse (guns are digitizer + keyboard):
+                                // remember where the user's cursor is (Change 4).
+                                if (GetCursorPos(out var pt))
                                 {
-                                    IntPtr ph = new IntPtr(buf.ToInt64() + hsz);
-                                    var hid = (RAWHID)Marshal.PtrToStructure(ph, typeof(RAWHID));
-                                    int nb = (int)(hid.Count * hid.SizeHid);
-                                    if (nb >= 6)
+                                    MouseX = pt.X; MouseY = pt.Y;
+                                    HaveMousePos = true;
+                                }
+                            }
+                            else
+                            {
+                                string name = DeviceName(hdr.Dev);
+                                var gm = GaimePath.Match(name);
+                                if (gm.Success)
+                                {
+                                    if (hdr.Type == 2) // digitizer
                                     {
-                                        byte[] raw = new byte[nb];
-                                        Marshal.Copy(new IntPtr(ph.ToInt64() + 8), raw, 0, nb);
-                                        if (raw[0] == 1)
+                                        IntPtr ph = new IntPtr(buf.ToInt64() + hsz);
+                                        var hid = (RAWHID)Marshal.PtrToStructure(ph, typeof(RAWHID));
+                                        int nb = (int)(hid.Count * hid.SizeHid);
+                                        if (nb >= 6)
                                         {
-                                            string ser = SnOf(name);
-                                            int fl = raw[1];
-                                            _onPointer(ser, raw[2] | (raw[3] << 8), raw[4] | (raw[5] << 8), (fl & 1) != 0);
+                                            byte[] raw = new byte[nb];
+                                            Marshal.Copy(new IntPtr(ph.ToInt64() + 8), raw, 0, nb);
+                                            if (raw[0] == 1)
+                                            {
+                                                string ser = SnOf(name);
+                                                int fl = raw[1];
+                                                _onPointer(ser, raw[2] | (raw[3] << 8), raw[4] | (raw[5] << 8), (fl & 1) != 0);
+                                            }
                                         }
                                     }
-                                }
-                                else if (hdr.Type == 1) // legacy keyboard: gun buttons
-                                {
-                                    int vkey = Marshal.ReadInt16(buf, (int)hsz + 6);
-                                    int msg = Marshal.ReadInt32(buf, (int)hsz + 8);
-                                    _onKey(SnOf(name), vkey, msg == 256);
+                                    else if (hdr.Type == 1) // legacy keyboard: gun buttons
+                                    {
+                                        int vkey = Marshal.ReadInt16(buf, (int)hsz + 6);
+                                        int msg = Marshal.ReadInt32(buf, (int)hsz + 8);
+                                        _onKey(SnOf(name), vkey, msg == 256);
+                                    }
                                 }
                             }
                         }

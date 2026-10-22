@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using GaimeFeeder;
 
 namespace GaimeTray
 {
@@ -97,7 +98,7 @@ namespace GaimeTray
             Controls.Add(cards);
             _emptyHint = new Label
             {
-                Text = "no guns yet — plug one in, it attaches in ~2 s (launcher-first OK)",
+                Text = "no guns yet — plug one in, it attaches in ~10 s (launcher-first OK)",
                 Dock = DockStyle.Top, Height = 22, TextAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Dim, BackColor = Bg, Visible = false,
             };
@@ -302,13 +303,11 @@ namespace GaimeTray
             });
         }
 
+        // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.
         static string LogDir()
         {
-            var root = Path.GetFullPath(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "..", "..", ".."));
-            Directory.CreateDirectory(Path.Combine(root, "logs"));
-            return Path.Combine(root, "logs");
+            Directory.CreateDirectory(AppPaths.Logs);
+            return AppPaths.Logs;
         }
 
         static bool IsAutostart()

@@ -13,6 +13,26 @@ Sequence performed: `Trigger, A, Trigger, B, Trigger, Coin, Trigger, Start, Trig
 | Trigger | — | — | digitizer tip bit (IF1), no keyboard event |
 
 Matches MP1st report. (Later MOUSE traffic is the desk Logitech mouse, unrelated.)
-Feeder mapping (DemulShooter/Teknoparrot via ViGEm Xbox360, per gun):
-Trigger→RT, A→A, B→B, Coin→Back, Start→Start. Recoil switch: host-silent (gun-local).
+
+## Feeder → ViGEm Xbox360 pad (DemulShooter / Teknoparrot), per gun
+
+Trigger = X (button 3) only — the RB button and the right-trigger slider were
+removed so the trigger is a single clean, easy-to-map button. Standard Xbox /
+DirectInput button order (verified against the old RB mapping):
+
+| # | XInput button | Gun function |
+|---|---|---|
+| 1 | A | Gun A (SPACE) |
+| 2 | B | Gun B (B) |
+| 3 | X | TRIGGER |
+| 4 | Y | — |
+| 5 | LB | — |
+| 6 | RB | — |
+| 7 | Back | Coin (C) |
+| 8 | Start | Start (Q) |
+| 9 | L3 | — |
+| 10 | R3 | — |
+
+Aim: left stick. X Axis = HID usage 0x30, Y Axis = 0x31 — the correct usages
+for the feeder's left stick, leave them. Recoil switch: host-silent (gun-local).
 Pedal: not detected by PC (console-only).

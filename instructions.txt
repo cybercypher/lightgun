@@ -1,0 +1,39 @@
+You are implementing a batch of changes to the G'AIM'E light-gun feeder repo (C# net8.0-windows, builds clean: src/GaimeFeeder + src/GaimeTray, engine shared via linked compile). Everything below was diagnosed against the actual code and hardware — implement exactly this, in order. Verify on the machine; label hypotheses; never guess.
+
+CONTEXT / WHAT EXISTS (reuse, don't reinvent)
+- Repo: github.com/torsoreaper/lightgun. Hardware: VID_2E2C/PID_0631; IF0 keyboard (A=space, B=b, coin=c, start=q); IF1 digitizer, report ID 1, absolute 0..10000, bit0=tip/trigger, bit1=in_range (ASSERTED EVEN ON GARBAGE — never gate on it alone).
+- Stable numbering in guns.json: 11111->1, 22222->2 (GunMap). Working: RawInput capture (digitizer 0x0D/0x04 + keyboard, per-gun via MI suffix -> sn), GunState filters (median-of-5 spike reject, max-jump gate, trigger latch-and-hold), RectCalib 5-point calibration persisted per sn, hot-plug rescan, GaimeTray UI.
+- DECISION: TC3 / Teknoparrot-fork path is DROPPED (not DemulShooter compatible). The ViGEm XInput pads are now the DemulShooter path. Nothing needs preserving for the fork.
+
+CHANGE 1 — trigger on X button only (src/GaimeFeeder/VigemPad.cs, shared via linked compile)
+- In Feed(): trigger asserts Xbox360Button.X ONLY. Delete the RightShoulder button line and the RightTrigger slider line.
+- Rationale: easier to map in DemulShooter; A/B/Back/Start already carry gun A/B/coin/start; X was free.
+- Update docs/buttons.md with the DemulShooter button table (standard Xbox/DirectInput order, verified against the old RB mapping): 1=A (gun A), 2=B (gun B), 3=X (TRIGGER), 4=Y, 5=LB, 6=RB, 7=Back (coin), 8=Start, 9=L3, 10=R3. X Axis 0x30 / Y Axis 0x31 are the correct HID usages for the feeder's left stick — leave them.
+
+CHANGE 2 — deterministic pad slots (src/GaimeFeeder/Program.cs + src/GaimeTray/FeederEngine.cs)
+- Bug: VigemPad(padIndex) IGNORES padIndex — it calls CreateXbox360Controller() with no index. ViGEmBus assigns slots in connection order. Both EnsurePads() (Program.cs:153, FeederEngine.cs:208) iterate in dictionary-insertion order (startup enumeration / hot-plug arrival), NOT pad-index order. So SN11111 is not guaranteed pad 1: e.g. gun 22222 present at startup + 11111 hot-plugged later => 11111 lands on slot 2.
+- Fix A: in both EnsurePads, iterate in pad-index order: foreach (var g in Guns.Values.OrderBy(g => g.PadIndex)) (inside the existing locks in FeederEngine).
+- Fix B (hot-plug): in AttachGuns (and the tray engine's attach path), after adding newcomers and before CalibrateNext(): if any newcomer has a lower PadIndex than any gun that already has a pad, dispose all pads and let EnsurePads recreate in pad-index order:
+  bool needRebuild = sns.Any(s => Guns.TryGetValue(s, out var ng) &&
+      Pads.Keys.Any(ps => Guns.TryGetValue(ps, out var eg) && eg.PadIndex > ng.PadIndex));
+  if (needRebuild) CleanupPads(); // CalibrateNext()->EnsurePads() recreates in order (tray: DisposePads())
+  Otherwise create the newcomer's pad normally — it takes the next free slot, which is correct.
+- After this: both guns plugged at feeder start => sn11111 = slot 1 / IG_01 deterministically. Re-select P1/P2 devices in DemulShooter once after rebuilding (device paths may shift).
+
+CHANGE 3 — valid-track gating (fixes the Y drift + the cursor-crazy)
+- Symptoms: upward Y drift in the DemulShooter preview while the feeder runs; OS cursor thrown around for ~30s when a gun idles. Cause: the feeder forwards the gun's idle wander (slow ~28 Hz full-span garbage); small steps pass the max-jump gate so the stick creeps.
+- Implement in the shared feed path (GunState.cs, so feeder and tray both benefit): add a per-gun valid-lock test. Forward AIM to the virtual pad ONLY when all hold: (a) recent report rate indicates a real lock — fast stream (~200+ Hz); idle wander is <60 Hz; make the threshold a named const; (b) position inside calibration bounds; (c) passes the existing spike/jump filters. When invalid: write NOTHING for aim — the virtual pad holds last position. Button states (trigger/A/B/coin/start) always forward; the gate is aim-only.
+- Known hardware behavior to respect (do not try to suppress it): a trigger pull = physical digitizer tip = Windows touch-tap = a real system left-click at the gun cursor's position. That's why pulling the trigger during DemulShooter GUI mapping sometimes minimizes everything (tap lands on show-desktop). Prefer typing button numbers / hand-editing config over GUI capture.
+
+CHANGE 4 — cursor bodyguard (replaces QuarantineCursor)
+- Delete the park-at-(0,0) quarantine. Instead: register the real system mouse via RawInput (usage page 0x01, usage 0x06... no — 0x01/0x02, INPUTSINK; the guns are digitizer+keyboard, never mice, so any RawInput mouse is the user's mouse) and remember its last position. Whenever any gun is in idle-wander (Change 3 gate invalid) AND that gun produced a report within the freshness window (keep 500 ms), restore the OS cursor to the real mouse's last position. While a gun has a valid lock, leave the cursor alone.
+
+HOUSE RULES (from the repo)
+- Verify on the machine; label hypotheses. Every state path stays keyed per gun (sn/hDevice) — never merge the two guns' input. Handle WM_INPUT_DEVICE_CHANGE cleanly. No admin required; don't add any.
+
+DONE WHEN
+- Rebuild: 0 warnings / 0 errors. Both guns plugged at start: tray XInput tab shows sn11111 on slot 1, sn22222 on slot 2, every launch. Late hot-plug of gun 1 rebuilds slots correctly.
+- joy.cpl / DemulShooter Device Preview: trigger lights button 3 (X) and nothing else; gun A/B/coin/start light 1/2/7/8.
+- Idle test: both guns plugged, left alone 60 s (not aimed at screen): virtual pads hold perfectly still in DemulShooter preview (no drift), Windows cursor never jumps, user keeps full mouse control the whole time.
+- Live test: DemulShooter P1 = pad 1 (re-selected after the rebuild), Virtua Cop 2 via the existing launch script: aim tracks, trigger fires in gameplay, both guns independent for 2-player.
+- docs/buttons.md updated with the button table.

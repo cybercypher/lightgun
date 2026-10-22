@@ -31,10 +31,8 @@ namespace GaimeFeeder
 
         static string Path(string serial)
         {
-            // BaseDirectory is bin/Debug|Release/net8.0-windows/ -> repo root is 5 up.
-            var dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "..", "..", "..", "calibrations"));
+            // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.
+            var dir = AppPaths.Calibrations;
             Directory.CreateDirectory(dir);
             return System.IO.Path.Combine(dir, $"cal_{serial}.json");
         }

@@ -6,7 +6,7 @@ using Nefarius.ViGEm.Client.Targets.Xbox360;
 namespace GaimeFeeder
 {
     // One ViGEm Xbox360 pad per gun (J1/J2). DemulShooter/Teknoparrot read aim
-    // from the left stick; trigger = right trigger; A/B/Coin/Start mapped per docs/buttons.md.
+    // from the left stick; trigger = X (button 3); A/B/Coin/Start mapped per docs/buttons.md.
     sealed class VigemPad : IDisposable
     {
         readonly ViGEmClient _client;
@@ -37,8 +37,7 @@ namespace GaimeFeeder
                 _pad.SetAxisValue(Xbox360Axis.LeftThumbX, ax);
                 _pad.SetAxisValue(Xbox360Axis.LeftThumbY, ay);
             }
-            _pad.SetButtonState(Xbox360Button.RightShoulder, triggerDown);
-            _pad.SetSliderValue(Xbox360Slider.RightTrigger, (byte)(triggerDown ? 255 : 0));
+            _pad.SetButtonState(Xbox360Button.X, triggerDown);
             bool testBtn = DateTime.UtcNow < g.TestBtnUntil;
             _pad.SetButtonState(Xbox360Button.A, g.BtnA || (testBtn && (g.TestBtnMask & 1) != 0));
             _pad.SetButtonState(Xbox360Button.B, g.BtnB || (testBtn && (g.TestBtnMask & 2) != 0));

@@ -104,7 +104,7 @@ namespace GaimeFeeder
             MainWin = win;
             win.Load += (s, e) => CalibrateNext();
             Console.WriteLine("Feeding. F12 = recalibrate, ESC = quit (feeder console focused).");
-            Console.WriteLine("Hot-plug on: plug a gun any time, it attaches within ~2 s.");
+            Console.WriteLine("Hot-plug on: plug a gun any time, it attaches within ~10 s.");
             var keys = new System.Threading.Thread(ReadKeys) { IsBackground = true };
             keys.Start();
             StartPoll();
@@ -152,7 +152,10 @@ namespace GaimeFeeder
 
         static void EnsurePads()
         {
-            foreach (var g in Guns.Values)
+            // Deterministic slots (Change 2): ViGEmBus hands out XInput slots in
+            // connection order, so create pads in pad-index order to guarantee
+            // sn11111 = slot 1 / sn22222 = slot 2.
+            foreach (var g in Guns.Values.OrderBy(g => g.PadIndex))
                 if (g.Calib != null && !Pads.ContainsKey(g.Serial))
                 {
                     try { Pads[g.Serial] = new VigemPad(g.PadIndex); }
@@ -169,18 +172,28 @@ namespace GaimeFeeder
 
         // Hot-plug: launcher-first flow. The feeder snapshots guns at startup,
         // so a gun plugged after launch was previously ignored forever. A
-        // background thread re-enumerates sns every 2 s; newcomers attach on
-        // the UI thread (cal windows + RawInput map are UI-thread affine).
+        // background thread re-enumerates sns every HotplugRescanMs;
+        // newcomers attach on the UI thread (cal windows + RawInput map are
+        // UI-thread affine).
         // Binding-mode pads (bind1/bind2) are dropped when the first real gun
         // arrives so XInput slots stay 1:1 with guns. Removal needs no action:
         // the GunState stays, its pad just stops receiving reports.
+        //
+        // Rescan interval is deliberately slow: each poll opens the gun's
+        // vendor interface and sends a get_info query, and the gun writes a
+        // ~85-byte heartbeat line to its /app log for EVERY query. At 2 s that
+        // is ~43k lines/day (~3.7 MB), which filled the gun's 3.9 MB /app
+        // partition and killed its app layer. Slower here is strictly better;
+        // 10 s still attaches a hot-plugged gun promptly.
+        const int HotplugRescanMs = 10000;
+
         static void StartHotplug()
         {
             var t = new System.Threading.Thread(() =>
             {
                 while (true)
                 {
-                    System.Threading.Thread.Sleep(2000);
+                    System.Threading.Thread.Sleep(HotplugRescanMs);
                     List<string> sns;
                     try { sns = HidIdentity.EnumerateGunSns(); }
                     catch { continue; }
@@ -231,6 +244,19 @@ namespace GaimeFeeder
                 Console.WriteLine($"Hot-plug: attached {Guns[s].Label} (cal {(c == null ? "needed - aim + trigger" : "loaded")}).");
             }
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
+            // Deterministic slots (Change 2): if a newcomer outranks an existing
+            // pad's gun (lower PadIndex, e.g. gun 1 hot-plugged after gun 2 was
+            // already on slot 1), ViGEmBus order would put it in the wrong slot.
+            // Dispose every pad; CalibrateNext()->EnsurePads() recreates them in
+            // pad-index order. Otherwise the newcomer just takes the next free
+            // slot, which is already correct.
+            bool needRebuild = sns.Any(s => Guns.TryGetValue(s, out var ng) &&
+                Pads.Keys.Any(ps => Guns.TryGetValue(ps, out var eg) && eg.PadIndex > ng.PadIndex));
+            if (needRebuild)
+            {
+                Console.WriteLine("Hot-plug: rebuilding pads in pad-index order.");
+                CleanupPads();
+            }
             CalibrateNext();
         }
 
@@ -284,7 +310,7 @@ namespace GaimeFeeder
                 if (sn == ActiveCalibSn) ActiveCalib.TriggerSample();
             }
             Feed(g);
-            QuarantineCursor(g);
+            CursorBodyguard(g);
             }
             catch (Exception ex) { Console.WriteLine($"OnPointer ERROR: {ex.GetType().Name}: {ex.Message}"); }
         }
@@ -292,16 +318,20 @@ namespace GaimeFeeder
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetCursorPos(int X, int Y);
 
-        // Cursor quarantine: the gun is a system touchscreen, so Windows drives
-        // the OS cursor straight from it. Slow reports (<60 Hz) are idle/desk
-        // wander (thousands of counts of garbage) — park the cursor at (0,0)
-        // so stray clicks land on empty desktop. A fast aimed stream (~265 Hz)
-        // is left alone so the cursor tracks aim (service menu etc).
-        // Freshness gate: only park on a live report, never strand the cursor.
-        static void QuarantineCursor(GunState g)
+        // Cursor bodyguard (Change 4): the gun is a system touchscreen, so
+        // Windows drives the OS cursor straight from it. While a gun is
+        // idle-wandering (valid-lock gate off) its stray reports would throw
+        // the cursor around — restore it to the real mouse's last known
+        // position instead of parking at (0,0). While a gun has a valid lock,
+        // leave the cursor alone so it tracks aim (service menu etc).
+        // Freshness gate: only act on a live report (500 ms), never strand the
+        // cursor.
+        static void CursorBodyguard(GunState g)
         {
             if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
-            if (g.LastIntervalMs > 1000.0 / 60.0) SetCursorPos(0, 0);
+            if (g.ValidLock) return;
+            if (!RawInputWindow.HaveMousePos) return;
+            SetCursorPos(RawInputWindow.MouseX, RawInputWindow.MouseY);
         }
 
         static void OnKey(string sn, int vkey, bool down)
@@ -345,7 +375,11 @@ namespace GaimeFeeder
                 sx = (g.Calib.ScreenW - 1) / 2 + g.TestStickX * (g.Calib.ScreenW - 1) / 2;
                 sy = (g.Calib.ScreenH - 1) / 2 + g.TestStickY * (g.Calib.ScreenH - 1) / 2;
             }
-            p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
+            // Change 3: aim only on a valid on-screen lock (fast stream + inside
+            // calibration bounds); otherwise write nothing and let the pad hold.
+            // Test pulses bypass the gate so diagnostics still reach the pad.
+            p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH,
+                   inside && (g.ValidLock || testStick), g, down);
         }
 
         static void CleanupPads()

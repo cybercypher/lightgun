@@ -20,6 +20,7 @@
   <ItemGroup>
     <!-- Reuse the proven feeder engine unchanged. Program.cs is NOT linked:
          orchestration lives in FeederEngine.cs (instance-based, UI events). -->
+    <Compile Include="..\GaimeFeeder\AppPaths.cs" Link="Engine\AppPaths.cs" />
     <Compile Include="..\GaimeFeeder\GunState.cs" Link="Engine\GunState.cs" />
     <Compile Include="..\GaimeFeeder\GunMap.cs" Link="Engine\GunMap.cs" />
     <Compile Include="..\GaimeFeeder\RectCalib.cs" Link="Engine\RectCalib.cs" />

@@ -28,9 +28,34 @@ namespace GaimeFeeder
         long _tipOffT0;
         public bool TriggerDown;
         public DateTime TriggerEdge;
-        // Report-rate tracking for cursor quarantine (see QuarantineCursor).
+        // Report-rate tracking: drives the valid-lock gate below and the tray's
+        // Hz readout.
         long _lastTick;
         public double LastIntervalMs = 1000;
+
+        // Valid-lock gate (Change 3): a real on-screen lock streams ~265 Hz
+        // (interval ~3.8 ms); an idle gun wanders the whole span at <60 Hz
+        // (measured ~28 Hz). Only a fast, fresh stream may move the virtual
+        // stick, so idle wander can't creep the aim. HYPOTHESIS: the ~265 Hz
+        // vs <60 Hz split is the measured hardware behaviour. The rate is
+        // averaged over a short window so one slow sample during a real aim
+        // sweep can't freeze the stick.
+        const int LockWin = 8;
+        const double LockMinHz = 200.0;
+        readonly double[] _ivWin = new double[LockWin];
+        int _ivCount, _ivIdx;
+
+        public bool ValidLock
+        {
+            get
+            {
+                if (_ivCount == 0) return false;
+                double sum = 0;
+                for (int i = 0; i < _ivCount; i++) sum += _ivWin[i];
+                double avgMs = sum / _ivCount;
+                return avgMs > 0 && 1000.0 / avgMs >= LockMinHz;
+            }
+        }
         public double LastPressSpanMs;
         public double LastReleaseQuietMs;
         public int LastBlip;
@@ -114,7 +139,13 @@ namespace GaimeFeeder
             RawX = fx; RawY = fy; InRange = inRange;
             LastReport = DateTime.UtcNow;
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (_lastTick != 0) LastIntervalMs = (now - _lastTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            if (_lastTick != 0)
+            {
+                LastIntervalMs = (now - _lastTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                _ivWin[_ivIdx] = LastIntervalMs;
+                _ivIdx = (_ivIdx + 1) % LockWin;
+                if (_ivCount < LockWin) _ivCount++;
+            }
             _lastTick = now;
             // Latch ring stores filtered positions too: the pre-press latch must
             // not capture a glitch sample just before the trigger edge.

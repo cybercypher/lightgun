@@ -11,13 +11,8 @@ namespace GaimeFeeder
     // gun is always the same number -> same ViGEm pad (J1/J2).
     static class GunMap
     {
-        static string Path()
-        {
-            var dir = System.IO.Path.GetFullPath(System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "..", "..", ".."));
-            return System.IO.Path.Combine(dir, "guns.json");
-        }
+        // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.
+        static string Path() => AppPaths.GunsJson;
 
         public static Dictionary<string, int> Load(IEnumerable<string> seen)
         {

@@ -1,1 +1,2 @@
-& "C:\Program Files\dotnet\dotnet.exe" "\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\src\GaimeFeeder\bin\Debug\net8.0-windows\GaimeFeeder.dll" --xcheck 2>&1 | Tee-Object -FilePath "\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\logs\xcheck.log"
+# XInput slot viewer, running the deployed copy at C:\games\feeder.
+& "C:\games\feeder\GaimeFeeder.exe" --xcheck 2>&1 | Tee-Object -FilePath "C:\games\feeder\logs\xcheck.log"

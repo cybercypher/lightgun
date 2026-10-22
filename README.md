@@ -26,7 +26,7 @@ See `docs/gaime_protocol.md`.
 ```
 Gun 1 (serial <usb-serial>) ──hidapi path──┐
                                      ├─► per-gun process ─► calibration (bbox + homography)
-Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad 1 (J1): left-stick = aim, RT = trigger
+Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad 1 (J1): left-stick = aim, X = trigger
                                            └─► ViGEm Xbox360 Pad 2 (J2): same
 ```
 
@@ -53,14 +53,38 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
 
 ## Feeder (`src/GaimeFeeder`, C# net8.0-windows, builds clean)
 
-- `GaimeFeeder --list` — verified: `guns: <usb-serial>, <usb-serial>` with all 6 HID suffixes routed.
-- Run: install **ViGEmBus** (https://github.com/ViGEm/ViGEmBus), then
-  `dotnet src/GaimeFeeder/bin/Debug/net8.0-windows/GaimeFeeder.dll`
-  from Windows. First run per gun: fullscreen 5-point calibration
-  (aim + trigger, ESC skips), saved to `calibrations/cal_<sn>.json`.
-- Per gun → Xbox360 pad J1/J2: left stick = calibrated aim, RT = trigger
-  (debounced, latched pre-press), A/B/Back/Start per `docs/buttons.md`.
+- `GaimeFeeder --list` — shows the gun sns + HID routing, exits.
+- Per gun → Xbox360 pad J1/J2: left stick = calibrated aim, **X = trigger**
+  (button 3; debounced, latched pre-press), A/B/Back/Start per `docs/buttons.md`.
 - Stable names in `guns.json`: Gun 1 = sn `11111`, Gun 2 = sn `22222`
   (on-device serials, stable across reboots/ports — see `docs/identity.md`).
-  Gun number = ViGEm pad number (J1/J2), forever.
+  Gun number = ViGEm pad number (J1/J2), forever, created in pad-index order.
+- Aim is forwarded only on a valid on-screen lock (~200+ Hz); idle wander
+  (<60 Hz) is dropped so the virtual stick holds. Idle cursor wander is
+  countered by restoring the OS cursor to the real mouse (cursor bodyguard).
 - F12 = recalibrate, ESC = quit.
+
+## Deployment — `C:\games\feeder`
+
+The runtime install lives at **`C:\games\feeder`** (Windows-native, not the
+WSL repo), next to the other emulator folders. It is self-contained:
+
+```
+C:\games\feeder\
+  GaimeTray.exe / GaimeFeeder.exe (+ .dll, deps, runtimeconfig, Nefarius)
+  guns.json
+  calibrations\cal_<sn>.json
+  logs\  (tray-<date>.log, feeder.log, xcheck.log, capture-*.txt)
+  Launch-Tray.cmd   Launch-Feeder.cmd   Feeder.ps1   XCheck.ps1
+```
+
+- Daily driver: `C:\games\feeder\Launch-Tray.cmd` (or the repo's
+  `tools\Launch-Tray.cmd`, which starts the deployed copy).
+- The apps resolve their data root by walking up from the exe to the folder
+  holding `guns.json` (`AppPaths.cs`) — so the deployed folder is the root,
+  and a dev build under `src\<App>\bin\...\net8.0-windows\` still resolves to
+  the repo root.
+- Rebuild + redeploy after source changes: run `tools\Deploy-Feeder.ps1`
+  (`dotnet publish -c Release` of both projects into `C:\games\feeder`).
+- Requires **ViGEmBus** (https://github.com/ViGEm/ViGEmBus) and the .NET 8
+  Windows desktop runtime.

@@ -1,5 +1,8 @@
 logs/*.log
 logs/capture-*.txt
+# reference dumps, firmware binaries and bit-verified backups pulled off the
+# guns (HANDOFF4.md) — local artifacts, not source
+logs/gunref/
 src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
 src/GaimeTray/bin/

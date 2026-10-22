@@ -35,6 +35,7 @@ namespace GaimeFeeder
         static extern uint GetState91(uint idx, out XINPUT_STATE state);
 
         const ushort RB = 0x0200, LB = 0x0100, A = 0x1000, B = 0x2000, BACK = 0x0020, START = 0x0010;
+        const ushort X = 0x4000;
 
         static bool TryGet(uint i, out XINPUT_STATE st)
         {
@@ -46,7 +47,7 @@ namespace GaimeFeeder
 
         public static void Run()
         {
-            Console.WriteLine("XInput slots 0-3 @10Hz. Feeder T/G = RB+RT on its pad. Ctrl+C quits.");
+            Console.WriteLine("XInput slots 0-3 @10Hz. Feeder T/G = X on its pad. Ctrl+C quits.");
             Console.WriteLine("Which slot lights = which XInput-N Teknoparrot will bind.");
             string[] last = new string[4];
             while (true)
@@ -58,7 +59,7 @@ namespace GaimeFeeder
                     {
                         var g = st.Gamepad;
                         line = $"slot {i}: #{st.dwPacketNumber} " +
-                               $"RB={((g.wButtons & RB) != 0 ? 1 : 0)} " +
+                               $"X={((g.wButtons & X) != 0 ? 1 : 0)} " +
                                $"RT={g.bRightTrigger,3} LT={g.bLeftTrigger,3} " +
                                $"LX={g.sThumbLX,6} LY={g.sThumbLY,6} " +
                                $"A={((g.wButtons & A) != 0 ? 1 : 0)} " +

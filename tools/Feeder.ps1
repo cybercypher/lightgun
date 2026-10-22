@@ -1,1 +1,2 @@
-& "C:\Program Files\dotnet\dotnet.exe" "\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\src\GaimeFeeder\bin\Debug\net8.0-windows\GaimeFeeder.dll" 2>&1 | Tee-Object -FilePath "\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\logs\feeder.log"
+# Console feeder, running the deployed copy at C:\games\feeder.
+& "C:\games\feeder\GaimeFeeder.exe" 2>&1 | Tee-Object -FilePath "C:\games\feeder\logs\feeder.log"

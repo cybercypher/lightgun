@@ -28,6 +28,12 @@ namespace GaimeTray
 
         public bool Feeding { get; private set; }
 
+        // Hot-plug rescan interval. Each poll opens the gun's vendor interface
+        // and sends a get_info query; the gun writes an ~85-byte heartbeat log
+        // line per query. 2 s produced ~3.7 MB/day and filled the gun's 3.9 MB
+        // /app partition, which killed its app layer. See HANDOFF4.md.
+        const int HotplugRescanMs = 10000;
+
         readonly Dictionary<string, GunState> _guns = new Dictionary<string, GunState>();
         readonly Dictionary<string, VigemPad> _pads = new Dictionary<string, VigemPad>();
         readonly Dictionary<string, (int x, int y)> _latest = new Dictionary<string, (int x, int y)>();
@@ -76,7 +82,7 @@ namespace GaimeTray
             _raw.Show(); // invisible (Opacity 0): exists only for INPUTSINK
             Feeding = true;
             Emit(sns.Count == 0
-                ? "No guns: binding mode (plug a gun any time, attaches in ~2 s)."
+                ? "No guns: binding mode (plug a gun any time, attaches in ~10 s)."
                 : "Feeding: " + string.Join(", ", sns));
             GunsChanged?.Invoke();
             EnsureThreads();
@@ -171,6 +177,19 @@ namespace GaimeTray
             var numbering = GunMap.Load(allKnown);
             foreach (var s in sns) AddGun(s, numbering, silent: false);
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
+            // Deterministic slots (Change 2): if a newcomer outranks an existing
+            // pad's gun (lower PadIndex), ViGEmBus order would put it in the
+            // wrong slot; rebuild all pads so EnsurePads recreates them in
+            // pad-index order. Otherwise the newcomer takes the next free slot.
+            bool needRebuild;
+            lock (_guns) lock (_pads)
+                needRebuild = sns.Any(s => _guns.TryGetValue(s, out var ng) &&
+                    _pads.Keys.Any(ps => _guns.TryGetValue(ps, out var eg) && eg.PadIndex > ng.PadIndex));
+            if (needRebuild)
+            {
+                Emit("Hot-plug: rebuilding pads in pad-index order.");
+                DisposePads();
+            }
             GunsChanged?.Invoke();
             CalibrateNext();
         }
@@ -210,7 +229,9 @@ namespace GaimeTray
             if (!Feeding) return;
             lock (_guns) lock (_pads)
             {
-                foreach (var g in _guns.Values)
+                // Deterministic slots (Change 2): ViGEmBus hands out XInput slots
+                // in connection order, so create pads in pad-index order.
+                foreach (var g in _guns.Values.OrderBy(g => g.PadIndex))
                     if (g.Calib != null && !_pads.ContainsKey(g.Serial))
                     {
                         try { _pads[g.Serial] = new VigemPad(g.PadIndex); }
@@ -257,7 +278,12 @@ namespace GaimeTray
             {
                 while (true)
                 {
-                    Thread.Sleep(2000);
+                    // Slow by design: every poll queries the gun's vendor
+                    // interface, and the gun logs an ~85-byte heartbeat line per
+                    // query. At 2 s that was ~3.7 MB/day and filled its 3.9 MB
+                    // /app partition (killed the app layer). 10 s is plenty for
+                    // hot-plug. See HANDOFF4.md.
+                    Thread.Sleep(HotplugRescanMs);
                     List<string> sns;
                     try { sns = HidIdentity.EnumerateGunSns(); }
                     catch { continue; }
@@ -294,7 +320,7 @@ namespace GaimeTray
                     if (sn == _calibSn) _calib.TriggerSample();
                 }
                 Feed(g);
-                Quarantine(g);
+                CursorBodyguard(g);
             }
             catch (Exception ex) { Emit("OnPointer ERROR: " + ex.Message); }
         }
@@ -328,31 +354,34 @@ namespace GaimeTray
                 var (sx, sy, inside) = g.Calib.Map(
                     down && !testTrig ? g.LatchedX : g.RawX,
                     down && !testTrig ? g.LatchedY : g.RawY);
-                p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
+                // Change 3: aim only on a valid on-screen lock (fast stream +
+                // inside calibration bounds); otherwise write nothing and let
+                // the pad hold its last position.
+                p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH,
+                       inside && g.ValidLock, g, down);
             }
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetCursorPos(int X, int Y);
 
-        // Cursor quarantine: the gun is a system touchscreen, so Windows drives
-        // the OS cursor straight from it. Slow reports (<60 Hz) are idle/desk
-        // wander (thousands of counts of garbage) — park the cursor at (0,0)
-        // so stray clicks land on empty desktop. A fast aimed stream (~265 Hz)
-        // is left alone so the cursor tracks aim (service menu etc).
-        // Freshness gate: only park on a live report, never strand the cursor.
-        void Quarantine(GunState g)
+        // Cursor bodyguard (Change 4): the gun is a system touchscreen, so
+        // Windows drives the OS cursor straight from it. While a gun is
+        // idle-wandering (valid-lock gate off) its stray reports would throw
+        // the cursor around — restore it to the real mouse's last known
+        // position instead of parking at (0,0). While a gun has a valid lock,
+        // leave the cursor alone so it tracks aim.
+        // Freshness gate: only act on a live report (500 ms), never strand the
+        // cursor.
+        void CursorBodyguard(GunState g)
         {
             if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
-            if (g.LastIntervalMs > 1000.0 / 60.0) SetCursorPos(0, 0);
+            if (g.ValidLock) return;
+            if (!RawInputWindow.HaveMousePos) return;
+            SetCursorPos(RawInputWindow.MouseX, RawInputWindow.MouseY);
         }
 
-        static string LogDir()
-        {
-            var root = Path.GetFullPath(Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "..", "..", ".."));
-            return Path.Combine(root, "logs");
-        }
+        // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.
+        static string LogDir() => AppPaths.Logs;
     }
 }
