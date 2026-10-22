@@ -14,10 +14,25 @@ input; don't add admin requirements.
    write (this is exactly what happened after the first reboot).
    It is masked right now because `/tmp/logs` + the targets were created by
    hand. **On the next boot, `/tmp` is wiped → same failure again.**
-   Fixed copy is staged here and must be re-uploaded to the gun:
-   `logs/gunref/logs_watchdog.sh` — 2,078 bytes, md5 `e214ca10316b0f42780d6d917ff6ae07`
-   (the on-gun copy is the old 1,661-byte build, md5 `ca0257c0…`).
-   Upload method + verification procedure: §5.
+   The fixed build is committed at `tools/gun/logs_watchdog.sh` — 2,078 bytes,
+   md5 `e214ca10316b0f42780d6d917ff6ae07` (on-gun copy is the old 1,661-byte
+   build, md5 `ca0257c0…`). The patched launcher is `tools/gun/app.sh`
+   (md5 `b314d89b7c8b6730ea5aa6a9b02ba5b0`, already on the gun).
+
+   **Ready-to-run repair** (one command, uploads + md5-verifies + replaces):
+   ```
+   powershell.exe -NoProfile -ExecutionPolicy Bypass `
+     -File \\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\Upload-GunFile.ps1 `
+     -LocalPath \\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\gun\logs_watchdog.sh `
+     -RemotePath /app/shell/logs_watchdog.sh -Port COM4
+   ```
+   Then `sync; reboot` over the same console and verify, on the fresh boot:
+   - `ls -la /app/*.log` → every entry is `-> /tmp/logs/<name>`
+   - `ls -la /tmp/logs` → the targets exist (not a dangling link)
+   - `ps w` → `gun` and `{logs_watchdog.s}` both present
+   - `df -h /app` → well under 100%
+   If the app is dead after the boot, that ordering (targets before links) is
+   the first thing to check.
 2. **Feeder poll rate is still 2 s.** The "do 1 then 2" request (slow the
    hotplug rescan, then commit) was interrupted by this handoff. Not done yet.
 3. **Everything in the repo is uncommitted.** See §1 and §7.
@@ -342,6 +357,7 @@ old_logs.tgz       71,609 B  72fd7ba9efe951b2ff345718e509d57e   three stale logs
 old_logs/                    extracted copies of the above
 app.sh.new          1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (= on gun)
 logs_watchdog.sh    2,078 B  e214ca10316b0f42780d6d917ff6ae07   FIXED build — needs upload
+tools/gun/app.sh    1,234 B  b314d89b7c8b6730ea5aa6a9b02ba5b0   patched launcher (already on gun)
 ```
 
 `app_backup.tgz` is the **restore point** for the good gun's `/app` +
@@ -352,8 +368,8 @@ deleted.
 
 ## 7. Next steps, in order
 
-1. **Re-upload the fixed `logs_watchdog.sh`** (§0) and verify md5, then reboot
-   once and confirm on boot:
+1. **Re-upload the fixed `logs_watchdog.sh`** — the exact command is in §0.
+   Then reboot once and confirm on boot:
    - `/app/*.log` are symlinks whose targets exist under `/tmp/logs`
    - `ps w` shows `gun` and `logs_watchdog.sh`
    - `/app` well under 100%
