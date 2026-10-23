@@ -16,6 +16,52 @@ namespace GaimeFeeder
         public bool InRange;
         public DateTime LastReport = DateTime.MinValue;
 
+        // ---- host-side smoothing (1 euro filter) --------------------------
+        // The gun's NN+IMU output jitters by a few raw counts; mapped to a 4K
+        // screen that is several pixels of visible shake. Median5 removes
+        // spikes but not noise, so the median output is low-passed here.
+        // 1 euro: heavy smoothing while still (noise), light while moving (no
+        // perceptible lag) - the cutoff follows the estimated speed.
+        // Measured in the tray gallery (B = border, F = this filter).
+        public static volatile bool Smoothing = true;
+        const double MinCutoff = 4.0;    // Hz at rest
+        const double Beta = 0.012;       // Hz per count/s of speed
+        const double DerivCutoff = 1.2;  // Hz on the speed estimate
+        bool _fInit;
+        double _fX, _fY, _fDX, _fLastRawX, _fLastRawY, _fT0;
+
+        static double Alpha(double cutoff, double dt) =>
+            1.0 / (1.0 + (1.0 / (2 * Math.PI * cutoff)) / dt);
+
+        void Smooth(int mx, int my, out int ox, out int oy)
+        {
+            ox = mx; oy = my;
+            if (!Smoothing) { _fInit = false; return; }
+            double t = System.Diagnostics.Stopwatch.GetTimestamp() /
+                       (double)System.Diagnostics.Stopwatch.Frequency;
+            if (!_fInit)
+            {
+                _fX = _fLastRawX = mx; _fY = _fLastRawY = my;
+                _fDX = 0; _fT0 = t; _fInit = true;
+                return;
+            }
+            double dt = t - _fT0;
+            _fT0 = t;
+            if (dt <= 0 || dt > 0.2)
+            {
+                // Reacquired after a gap: snap instead of dragging the aim in.
+                _fX = _fLastRawX = mx; _fY = _fLastRawY = my; _fDX = 0;
+                return;
+            }
+            double dx = (mx - _fLastRawX) / dt;
+            _fLastRawX = mx; _fLastRawY = my;
+            _fDX += Alpha(DerivCutoff, dt) * (dx - _fDX);
+            double a = Alpha(MinCutoff + Beta * Math.Abs(_fDX), dt);
+            _fX += a * (mx - _fX);
+            _fY += a * (my - _fY);
+            ox = (int)Math.Round(_fX); oy = (int)Math.Round(_fY);
+        }
+
         // Trigger debounce.
         // Wall-clock gates are banned here: DateTime.UtcNow quantizes to ~15 ms
         // on Windows, which randomly swallows real pulls (3 reports at 265 Hz
@@ -136,6 +182,7 @@ namespace GaimeFeeder
             int fy = Median5(_my[0], _my[1], _my[2], _my[3], _my[4]);
             _mi = (_mi + 1) % FilterN;
 
+            Smooth(fx, fy, out fx, out fy);
             RawX = fx; RawY = fy; InRange = inRange;
             LastReport = DateTime.UtcNow;
             long now = System.Diagnostics.Stopwatch.GetTimestamp();

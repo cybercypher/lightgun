@@ -30,6 +30,9 @@ namespace GaimeTray
             public int Shots, Hits;
             public double LastErr = -1;
             public DateTime Seen = DateTime.MinValue;
+            // Stationary aim samples (decimated) for the noise readout.
+            public readonly Queue<(float X, float Y)> Quiet = new Queue<(float, float)>();
+            public int ReportN;
         }
 
         sealed class Shot
@@ -82,6 +85,25 @@ namespace GaimeTray
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == Keys.Escape) { Close(); return true; }
+            if (keyData == Keys.B)
+            {
+                // Sinden-style white border, shared with the calibration window.
+                // Clearing the samples makes the with/without comparison honest:
+                // press B, hold still, read the noise figure again.
+                ScreenBorder.Enabled = !ScreenBorder.Enabled;
+                foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+                Invalidate();
+                return true;
+            }
+            if (keyData == Keys.F)
+            {
+                // Host-side 1 euro filter on the aim stream. Same reset dance so
+                // the noise figure compares like with like.
+                GunState.Smoothing = !GunState.Smoothing;
+                foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+                Invalidate();
+                return true;
+            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -113,6 +135,13 @@ namespace GaimeTray
             {
                 var (sx, sy, inside) = cal.Map(g.RawX, g.RawY);
                 v.HasFix = true; v.Inside = inside; v.Sx = sx; v.Sy = sy;
+                // Noise sample: only on a valid lock (a real on-screen fix),
+                // decimated to ~80 Hz so 1.5 s of history fits in 120 entries.
+                if (v.Lock && ++v.ReportN % 6 == 0)
+                {
+                    v.Quiet.Enqueue(((float)sx, (float)sy));
+                    while (v.Quiet.Count > 120) v.Quiet.Dequeue();
+                }
             }
             _live = true;
 
@@ -154,7 +183,8 @@ namespace GaimeTray
             for (int i = 0; i < 40; i++)
             {
                 float x = _rng.Next(margin, w - margin);
-                float y = _rng.Next(margin, h - margin);
+                // Keep the top strip (HUD) clear of targets.
+                float y = _rng.Next(margin + 110, h - margin);
                 if (_target != null && Dist(x, y, _target.X, _target.Y) < r * 3 + 120) continue;
                 _target = new Target { X = x, Y = y, R = r };
                 return;
@@ -197,6 +227,7 @@ namespace GaimeTray
             gfx.SmoothingMode = SmoothingMode.AntiAlias;
             gfx.Clear(Bg);
 
+            ScreenBorder.Draw(gfx, ClientSize.Width, ClientSize.Height);
             DrawTarget(gfx);
             DrawShots(gfx);
             DrawCrosshairs(gfx);
@@ -279,7 +310,9 @@ namespace GaimeTray
             // entry the first time and threw IndexOutOfRange mid-paint.
             var rows = new List<(string Text, Color Color)>
             {
-                ("G'AIM'E  calibration gallery   ·   ESC to close", Color.White),
+                ("G'AIM'E  calibration gallery   ·   ESC to close   ·   B = white border " +
+                 (ScreenBorder.Enabled ? "ON" : "OFF") + "   ·   F = smoothing " +
+                 (GunState.Smoothing ? "ON" : "OFF"), Color.White),
                 ("", Dim),
             };
 
@@ -300,11 +333,14 @@ namespace GaimeTray
                 else
                 {
                     double acc = v.Shots > 0 ? 100.0 * v.Hits / v.Shots : 0;
+                    var (rms, maxJump) = Noise(v);
                     line = Pad(v.Label) +
                            "  raw " + v.RawX.ToString().PadLeft(5) + "," + v.RawY.ToString().PadLeft(5) +
                            "   screen " + ((int)v.Sx).ToString().PadLeft(4) + "," + ((int)v.Sy).ToString().PadLeft(4) +
                            (v.Inside ? "  IN " : "  OUT") +
                            "   " + v.Hz.ToString("F0").PadLeft(4) + " Hz" + (v.Lock ? " LOCK" : "     ") +
+                           "   noise " + (rms < 0 ? "hold still" :
+                               rms.ToString("F1") + " px (max " + maxJump.ToString("F0") + ")") +
                            "   hits " + v.Hits + "/" + v.Shots +
                            (v.Shots > 0 ? " (" + acc.ToString("F0") + "%)" : "") +
                            "   last miss " + (v.LastErr >= 0 ? v.LastErr.ToString("F0") + " px" : "-");
@@ -313,7 +349,8 @@ namespace GaimeTray
             }
 
             rows.Add(("", Dim));
-            rows.Add(("aim at the ring, pull the trigger   ·   every hit scores and moves the target", Dim));
+            rows.Add(("aim at the ring, pull the trigger   ·   B = white border (Sinden-style)   ·   " +
+                      "F = smoothing   ·   hold still to read the noise", Dim));
 
             float k = Math.Max(1f, Math.Min(ClientSize.Width, ClientSize.Height) / 1200f);
             using (var f = new Font("Consolas", 15 * k))
@@ -344,5 +381,32 @@ namespace GaimeTray
         }
 
         static string Pad(string s) => (s ?? "gun").PadRight(22);
+
+        // Radial RMS spread and largest sample-to-sample jump over the recent
+        // stationary window. -1 until there is enough data. This is the number
+        // to compare with the border on vs off.
+        static (double rms, double maxJump) Noise(GunVis v)
+        {
+            if (v.Quiet.Count < 30) return (-1, -1);
+            double mx = 0, my = 0;
+            foreach (var p in v.Quiet) { mx += p.X; my += p.Y; }
+            mx /= v.Quiet.Count; my /= v.Quiet.Count;
+
+            double var = 0, maxJump = 0;
+            bool first = true;
+            float px = 0, py = 0;
+            foreach (var p in v.Quiet)
+            {
+                double dx = p.X - mx, dy = p.Y - my;
+                var += dx * dx + dy * dy;
+                if (!first)
+                {
+                    double jx = p.X - px, jy = p.Y - py;
+                    maxJump = Math.Max(maxJump, Math.Sqrt(jx * jx + jy * jy));
+                }
+                first = false; px = p.X; py = p.Y;
+            }
+            return (Math.Sqrt(var / v.Quiet.Count), maxJump);
+        }
     }
 }

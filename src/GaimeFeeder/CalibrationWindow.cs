@@ -16,6 +16,7 @@ namespace GaimeFeeder
         readonly List<(int x, int y)> _samples = new List<(int x, int y)>();
         int _idx;
         readonly Label _label;
+        readonly Button _cancel;
 
         public RectCalib Result { get; private set; }
 
@@ -31,27 +32,57 @@ namespace GaimeFeeder
             {
                 ForeColor = Color.White,
                 Font = new Font("Consolas", 20),
-                Dock = DockStyle.Top,
-                Height = 80,
+                AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter
             };
             Controls.Add(_label);
-            var cancel = new Button
+            _cancel = new Button
             {
                 Text = "Cancel (ESC)",
                 Font = new Font("Consolas", 12),
                 Size = new Size(160, 40),
-                Location = new Point(10, 90)
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(60, 60, 60),
+                ForeColor = Color.White,
             };
-            cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-            Controls.Add(cancel);
+            _cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            Controls.Add(_cancel);
             MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) TriggerSample(); };
-            Shown += (s, e) => { Rebuild(); Activate(); };
+            Shown += (s, e) => { Rebuild(); LayoutChrome(); Activate(); };
+        }
+
+        // Keep the instructions and Cancel button clear of both the reference
+        // border and the five targets: instructions along the bottom centre
+        // (narrower than the screen, so the bottom corner targets stay clear),
+        // Cancel at the top centre (nothing but targets in the corners there).
+        void LayoutChrome()
+        {
+            if (_label == null || _cancel == null) return;
+            int w = ClientSize.Width, h = ClientSize.Height;
+            int t = ScreenBorder.Thickness(w, h);
+            int lw = Math.Min(w, Math.Max(320, (int)(w * 0.62)));
+            _label.Bounds = new Rectangle((w - lw) / 2, h - t - 78, lw, 64);
+            _cancel.Bounds = new Rectangle((w - 160) / 2, t + 16, 160, 40);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            LayoutChrome();
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); return true; }
+            // Same shared switch as the tray gallery: the gun must see the same
+            // reference while calibrating as it will in play.
+            if (keyData == Keys.B)
+            {
+                ScreenBorder.Enabled = !ScreenBorder.Enabled;
+                UpdateLabel();
+                Invalidate();
+                return true;
+            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -71,8 +102,8 @@ namespace GaimeFeeder
 
         void UpdateLabel() =>
             _label.Text = _serial == null
-                ? $"Aim EITHER gun at target {_idx + 1}/5, pull its trigger (ESC cancels)"
-                : $"{_display} : aim at target {_idx + 1}/5, pull trigger (ESC cancels)";
+                ? $"Aim EITHER gun at target {_idx + 1}/5, pull its trigger   (B = border {(ScreenBorder.Enabled ? "ON" : "OFF")}, ESC cancels)"
+                : $"{_display} : aim at target {_idx + 1}/5, pull trigger   (B = border {(ScreenBorder.Enabled ? "ON" : "OFF")}, ESC cancels)";
 
         // First trigger locks the window to whichever gun was used.
         public void LockTo(string serial, string display, Func<(int x, int y)> latest)
@@ -125,6 +156,8 @@ namespace GaimeFeeder
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+            // Reference border first, target on top of it.
+            ScreenBorder.Draw(e.Graphics, ClientSize.Width, ClientSize.Height);
             if (_idx < _targets.Count)
             {
                 var p = _targets[_idx];

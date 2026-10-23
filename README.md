@@ -68,6 +68,16 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
   numbers the pad receives — so it checks the real calibration: one ring target,
   a hit scores and moves it, and the HUD shows raw, mapped, IN/OUT, Hz/LOCK and
   the distance from the last shot to the target centre in screen pixels.
+  **B** toggles a Sinden-style white reference border (shared with the
+  calibration window, which toggles it with the same key) and **F** toggles the
+  host-side smoothing; with the gun held still the HUD reports a measured
+  `noise N.N px (max M)` figure, so both can be compared with numbers instead of
+  feel. Border geometry lives in `ScreenBorder.cs` so the two windows cannot
+  drift apart.
+- Aim is low-passed by a 1 euro filter on top of the median-of-5 spike
+  rejection: heavy smoothing while still, light while moving. At ~478 Hz the
+  rest-state time constant is ~40 ms but drops to a few ms during a fast sweep,
+  so it removes shake without adding perceptible lag to a flick.
 - F12 = recalibrate, ESC = quit (ESC also closes the gallery).
 
 ## Deployment — `C:\games\feeder`
