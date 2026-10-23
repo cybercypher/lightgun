@@ -60,8 +60,14 @@ namespace GaimeTray
         readonly Timer _tick = new Timer { Interval = 33 };
         readonly DateTime _opened = DateTime.UtcNow;
         DateTime _lastWaitPaint = DateTime.MinValue;
+
+        // Wired to the tray log by FeederEngine. The noise figure is the whole
+        // point of the B/F toggles, so each toggle writes the period that just
+        // ended instead of leaving it on screen to be forgotten.
+        public static Action<string> Log;
         Target _target;
         bool _live;
+        bool _measure;
 
         const double ShotLifeMs = 3000;
         public ShootingGallery()
@@ -79,7 +85,7 @@ namespace GaimeTray
                      ControlStyles.UserPaint, true);
             _tick.Tick += (s, e) => Tick();
             Shown += (s, e) => { SpawnTarget(); _tick.Start(); Activate(); };
-            FormClosed += (s, e) => _tick.Stop();
+            FormClosed += (s, e) => { _tick.Stop(); LogNoise("closed"); };
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -88,8 +94,9 @@ namespace GaimeTray
             if (keyData == Keys.B)
             {
                 // Sinden-style white border, shared with the calibration window.
-                // Clearing the samples makes the with/without comparison honest:
-                // press B, hold still, read the noise figure again.
+                // Log the period that just ended, then clear: the with/without
+                // comparison is only honest if the samples restart.
+                LogNoise("border " + (ScreenBorder.Enabled ? "on" : "off"));
                 ScreenBorder.Enabled = !ScreenBorder.Enabled;
                 foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
                 Invalidate();
@@ -97,9 +104,19 @@ namespace GaimeTray
             }
             if (keyData == Keys.F)
             {
-                // Host-side 1 euro filter on the aim stream. Same reset dance so
-                // the noise figure compares like with like.
+                // Host-side 1 euro filter on the aim stream.
+                LogNoise("smoothing " + (GunState.Smoothing ? "on" : "off"));
                 GunState.Smoothing = !GunState.Smoothing;
+                foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+                Invalidate();
+                return true;
+            }
+            if (keyData == Keys.M)
+            {
+                // Measure mode: fixed centre mark, target hidden, so "hold still"
+                // has an unambiguous place to hold.
+                if (_measure) LogNoise("measure end");
+                _measure = !_measure;
                 foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
                 Invalidate();
                 return true;
@@ -139,8 +156,15 @@ namespace GaimeTray
                 // decimated to ~80 Hz so 1.5 s of history fits in 120 entries.
                 if (v.Lock && ++v.ReportN % 6 == 0)
                 {
-                    v.Quiet.Enqueue(((float)sx, (float)sy));
-                    while (v.Quiet.Count > 120) v.Quiet.Dequeue();
+                    // In measure mode only samples near the centre mark count,
+                    // so relaxing between attempts does not poison the figure.
+                    bool near = !_measure ||
+                        Dist((float)sx, (float)sy, ClientSize.Width / 2f, ClientSize.Height / 2f) <= 300f;
+                    if (near)
+                    {
+                        v.Quiet.Enqueue(((float)sx, (float)sy));
+                        while (v.Quiet.Count > 120) v.Quiet.Dequeue();
+                    }
                 }
             }
             _live = true;
@@ -228,10 +252,40 @@ namespace GaimeTray
             gfx.Clear(Bg);
 
             ScreenBorder.Draw(gfx, ClientSize.Width, ClientSize.Height);
-            DrawTarget(gfx);
+            if (!_measure) DrawTarget(gfx);
+            DrawCentreMark(gfx);
             DrawShots(gfx);
             DrawCrosshairs(gfx);
             DrawHud(gfx);
+        }
+
+        // Fixed centre reference. Always visible (dim) so there is a place to
+        // hold; in measure mode it grows and brightens and the target hides, so
+        // "hold still" has one unambiguous meaning.
+        void DrawCentreMark(Graphics gfx)
+        {
+            float w = ClientSize.Width, h = ClientSize.Height;
+            float cx = w / 2f, cy = h / 2f;
+            float k = Math.Max(1f, Math.Min(w, h) / 1200f);
+            float r = (_measure ? 46f : 16f) * k;
+            var col = _measure ? Color.White : Color.FromArgb(80, 80, 80);
+            using (var pen = new Pen(col, _measure ? 4f : 2f))
+            {
+                gfx.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);
+                float arm = 22 * k;
+                gfx.DrawLine(pen, cx - r - arm, cy, cx - r + 6, cy);
+                gfx.DrawLine(pen, cx + r - 6, cy, cx + r + arm, cy);
+                gfx.DrawLine(pen, cx, cy - r - arm, cx, cy - r + 6);
+                gfx.DrawLine(pen, cx, cy + r - 6, cx, cy + r + arm);
+            }
+            if (!_measure) return;
+            using (var f = new Font("Consolas", 16 * k, FontStyle.Bold))
+            using (var b = new SolidBrush(Color.White))
+            {
+                string s = "HOLD STILL on the centre mark";
+                var sz = gfx.MeasureString(s, f);
+                gfx.DrawString(s, f, b, cx - sz.Width / 2, cy + r + 26 * k);
+            }
         }
 
         void DrawTarget(Graphics gfx)
@@ -349,8 +403,9 @@ namespace GaimeTray
             }
 
             rows.Add(("", Dim));
-            rows.Add(("aim at the ring, pull the trigger   ·   B = white border (Sinden-style)   ·   " +
-                      "F = smoothing   ·   hold still to read the noise", Dim));
+            rows.Add((_measure
+                ? "MEASURE - aim at the centre mark and hold still; press M when done (the figure is written to the log)"
+                : "aim at the ring, pull the trigger   ·   B = border (Sinden-style)   ·   F = smoothing   ·   M = measure noise", Dim));
 
             float k = Math.Max(1f, Math.Min(ClientSize.Width, ClientSize.Height) / 1200f);
             using (var f = new Font("Consolas", 15 * k))
@@ -378,6 +433,32 @@ namespace GaimeTray
                 using (var b = new SolidBrush(Dim))
                     gfx.DrawString(legend, f, b, bx, by);
             }
+        }
+
+        // One log line per state change, carrying the settled numbers for the
+        // period that just ended. Without this the whole measurement lives on
+        // screen and is lost the moment the window closes.
+        void LogNoise(string what)
+        {
+            var log = Log;
+            if (log == null) return;
+            string guns;
+            if (_vis.Count == 0) guns = "no guns";
+            else
+            {
+                var parts = new List<string>();
+                foreach (var v in _vis.Values)
+                {
+                    var (rms, maxJump) = Noise(v);
+                    parts.Add(v.Label + " " + (rms < 0
+                        ? "no data (" + v.Quiet.Count + " samples)"
+                        : "noise " + rms.ToString("F1") + " px, max jump " +
+                          maxJump.ToString("F0") + " px, " + v.Quiet.Count + " samples"));
+                }
+                guns = string.Join("; ", parts);
+            }
+            log("gallery [" + what + "]: border " + (ScreenBorder.Enabled ? "ON" : "OFF") +
+                ", smoothing " + (GunState.Smoothing ? "ON" : "OFF") + ", " + guns);
         }
 
         static string Pad(string s) => (s ?? "gun").PadRight(22);

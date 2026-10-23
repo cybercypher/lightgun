@@ -70,10 +70,13 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
   the distance from the last shot to the target centre in screen pixels.
   **B** toggles a Sinden-style white reference border (shared with the
   calibration window, which toggles it with the same key) and **F** toggles the
-  host-side smoothing; with the gun held still the HUD reports a measured
-  `noise N.N px (max M)` figure, so both can be compared with numbers instead of
-  feel. Border geometry lives in `ScreenBorder.cs` so the two windows cannot
-  drift apart.
+  host-side smoothing. **M** switches to a hold-still measurement: the target
+  hides and a fixed centre mark appears, so there is an unambiguous place to
+  aim. Every B/F/M toggle (and closing the gallery) writes the settled
+  `noise N.N px, max jump M px, K samples` figures for the period that just
+  ended to `logs\tray-<date>.log`, so the comparison survives the window.
+  Border geometry lives in `ScreenBorder.cs` so the two windows cannot drift
+  apart.
 - Aim is low-passed by a 1 euro filter on top of the median-of-5 spike
   rejection: heavy smoothing while still, light while moving. At ~478 Hz the
   rest-state time constant is ~40 ms but drops to a few ms during a fast sweep,

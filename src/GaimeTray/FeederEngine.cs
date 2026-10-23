@@ -144,6 +144,7 @@ namespace GaimeTray
                 return true;
             }
             _gallery = new ShootingGallery();
+            ShootingGallery.Log = s => Emit(s);
             _gallery.FormClosed += (s, e) => _gallery = null;
             _gallery.Show();
             _gallery.Activate();
