@@ -31,7 +31,7 @@ namespace GaimeTray
         // Hot-plug rescan interval. Each poll opens the gun's vendor interface
         // and sends a get_info query; the gun writes an ~85-byte heartbeat log
         // line per query. 2 s produced ~3.7 MB/day and filled the gun's 3.9 MB
-        // /app partition, which killed its app layer. See HANDOFF4.md.
+        // /app partition, which killed its app layer. See HANDOFF.md.
         const int HotplugRescanMs = 10000;
 
         readonly Dictionary<string, GunState> _guns = new Dictionary<string, GunState>();
@@ -303,7 +303,7 @@ namespace GaimeTray
                     // interface, and the gun logs an ~85-byte heartbeat line per
                     // query. At 2 s that was ~3.7 MB/day and filled its 3.9 MB
                     // /app partition (killed the app layer). 10 s is plenty for
-                    // hot-plug. See HANDOFF4.md.
+                    // hot-plug. See HANDOFF.md.
                     Thread.Sleep(HotplugRescanMs);
                     List<string> sns;
                     try { sns = HidIdentity.EnumerateGunSns(); }

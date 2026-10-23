@@ -2,7 +2,7 @@
 
 These are the files that keep the gun's 3.9 MB `/app` partition from filling up
 with heartbeat logs — the failure that killed the gun's whole application layer
-(no aim, no buttons, no config replies). Full diagnosis: `HANDOFF4.md`.
+(no aim, no buttons, no config replies). Full diagnosis: `HANDOFF.md`.
 
 ## Files
 
@@ -26,7 +26,7 @@ Both are byte-verified on the gun (md5 compared after upload).
 
 ## Deploy
 
-With the gun powered and a root shell on `J3` (115200 8N1 — see `HANDOFF4.md` §5):
+With the gun powered and a root shell on `J3` (115200 8N1 — see `HANDOFF.md` §5):
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
@@ -66,4 +66,4 @@ cd / && tar xzf app_backup.tgz
 - Do **not** make the log write fail (read-only/chattr). The app exits when it
   cannot log — that is the original outage.
 - Do **not** copy binaries from the public `gaime_mods` reference over this
-  gun: the units carry different vendor builds (see `HANDOFF4.md` §4).
+  gun: the units carry different vendor builds (see `HANDOFF.md` §4).
