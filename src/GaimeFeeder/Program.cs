@@ -100,6 +100,7 @@ namespace GaimeFeeder
             RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn());
 
             var win = new RawInputWindow(OnPointer, OnKey);
+            RawInputWindow.Log = s => Console.WriteLine("raw: " + s);
             win.FormClosed += (s, e) => CleanupPads();
             MainWin = win;
             win.Load += (s, e) => CalibrateNext();
@@ -287,6 +288,11 @@ namespace GaimeFeeder
         {
             try
             {
+            // The gun is a system digitizer, so Windows has just moved the OS
+            // cursor from this report. Put it back before any calibration/feed
+            // gating so the pointer never moves, calibrated or not.
+            RawInputWindow.PinCursor();
+
             LatestRaw[sn] = (x, y);
             if (!Guns.TryGetValue(sn, out var g) || g.Calib == null) return;
             bool wasDown = g.TriggerDown;
@@ -310,28 +316,8 @@ namespace GaimeFeeder
                 if (sn == ActiveCalibSn) ActiveCalib.TriggerSample();
             }
             Feed(g);
-            CursorBodyguard(g);
             }
             catch (Exception ex) { Console.WriteLine($"OnPointer ERROR: {ex.GetType().Name}: {ex.Message}"); }
-        }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        static extern bool SetCursorPos(int X, int Y);
-
-        // Cursor bodyguard (Change 4): the gun is a system touchscreen, so
-        // Windows drives the OS cursor straight from it. While a gun is
-        // idle-wandering (valid-lock gate off) its stray reports would throw
-        // the cursor around — restore it to the real mouse's last known
-        // position instead of parking at (0,0). While a gun has a valid lock,
-        // leave the cursor alone so it tracks aim (service menu etc).
-        // Freshness gate: only act on a live report (500 ms), never strand the
-        // cursor.
-        static void CursorBodyguard(GunState g)
-        {
-            if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
-            if (g.ValidLock) return;
-            if (!RawInputWindow.HaveMousePos) return;
-            SetCursorPos(RawInputWindow.MouseX, RawInputWindow.MouseY);
         }
 
         static void OnKey(string sn, int vkey, bool down)

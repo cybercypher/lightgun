@@ -1,7 +1,9 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Threading;
 using System.Windows.Forms;
+using GaimeFeeder;
 
 namespace GaimeTray
 {
@@ -36,6 +38,13 @@ namespace GaimeTray
             };
             ShowWindow();
             _eng.Start();
+            // `--test` opens the gallery straight away (shortcut / verification).
+            foreach (var a in Environment.GetCommandLineArgs())
+                if (string.Equals(a, "--test", StringComparison.OrdinalIgnoreCase))
+                {
+                    _win.Hide();
+                    _eng.OpenGallery();
+                }
         }
 
         static Icon MakeIcon()
@@ -110,9 +119,34 @@ namespace GaimeTray
 
     static class Program
     {
+        // A tray app has no console: without this, an exception surfaces as a
+        // raw .NET dialog and leaves nothing behind to diagnose. Write the full
+        // stack to logs\crash.log first.
+        static void LogCrash(Exception ex)
+        {
+            try
+            {
+                Directory.CreateDirectory(AppPaths.Logs);
+                File.AppendAllText(Path.Combine(AppPaths.Logs, "crash.log"),
+                    DateTime.Now.ToString("u") + "\r\n" + ex + "\r\n\r\n");
+            }
+            catch { }
+        }
+
         [STAThread]
         static void Main()
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) =>
+            {
+                LogCrash(e.Exception);
+                MessageBox.Show("GaimeTray hit an error:\r\n\r\n" + e.Exception.Message +
+                    "\r\n\r\nDetails: " + Path.Combine(AppPaths.Logs, "crash.log"),
+                    "G'AIM'E Tray", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+            AppDomain.CurrentDomain.UnhandledException +=
+                (s, e) => LogCrash(e.ExceptionObject as Exception);
+
             bool fresh;
             using (var m = new Mutex(true, "GaimeTraySingleInstance", out fresh))
             {

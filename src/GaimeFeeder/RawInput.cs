@@ -31,13 +31,37 @@ namespace GaimeFeeder
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         static extern uint GetRawInputDeviceInfo(IntPtr h, uint cmd, StringBuilder b, ref uint s);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+        [DllImport("user32.dll")] static extern bool SetCursorPos(int X, int Y);
 
-        // Cursor bodyguard anchor (Change 4): the guns are digitizer + keyboard
-        // and never expose a mouse, so every RawInput mouse is the user's real
-        // mouse. Snapshot the OS cursor whenever one moves; the bodyguard
-        // restores the cursor to this point while a gun idles (see Program).
-        public static int MouseX, MouseY;
-        public static volatile bool HaveMousePos;
+        // Cursor anchor: the guns are digitizer + keyboard and never expose a
+        // mouse, so every RawInput mouse report is the user's real mouse.
+        // Remember where it leaves the OS cursor; PinCursor() puts the cursor
+        // back there after every gun report. Windows itself moves the cursor
+        // from the digitizer, so snapping back is the only way to keep the
+        // pointer still without a filter driver (RIDEV_NOLEGACY only suppresses
+        // this app's legacy messages, not the system cursor).
+        public static int AnchorX, AnchorY;
+        public static volatile bool HaveAnchor;
+
+        // Diagnostic sink (the tray wires this to its log). One line per raw
+        // device on first sight is cheap and answers "which device is this?".
+        public static Action<string> Log;
+        readonly HashSet<IntPtr> _loggedDev = new HashSet<IntPtr>();
+
+        // Put the OS cursor back on the real mouse's last position. Called once
+        // per gun pointer report; a no-op when the cursor is already there.
+        public static void PinCursor()
+        {
+            if (!HaveAnchor)
+            {
+                if (!GetCursorPos(out var seed)) return;
+                AnchorX = seed.X; AnchorY = seed.Y; HaveAnchor = true;
+                return;
+            }
+            if (!GetCursorPos(out var pt)) return;
+            if (pt.X == AnchorX && pt.Y == AnchorY) return;
+            SetCursorPos(AnchorX, AnchorY);
+        }
 
         static readonly Regex GaimePath = new Regex(
             @"VID_2E2C&PID_0631&MI_0(\d)#", RegexOptions.IgnoreCase);
@@ -54,6 +78,13 @@ namespace GaimeFeeder
             ShowInTaskbar = false; Opacity = 0; ShowIcon = false;
             Load += (s, e) =>
             {
+                // Seed the anchor before the first gun report can move the
+                // cursor (a keyboard-only cabinet never produces a mouse
+                // report, but the pointer must still stay put).
+                if (GetCursorPos(out var seed))
+                {
+                    AnchorX = seed.X; AnchorY = seed.Y; HaveAnchor = true;
+                }
                 RegisterRawInputDevices(new[]
                 {
                     new RAWINPUTDEVICE { Page = 0x0D, Usage = 0x04, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
@@ -86,14 +117,22 @@ namespace GaimeFeeder
                         if (GetRawInputData(m.LParam, RID_INPUT, buf, ref sz, hsz) == sz)
                         {
                             var hdr = (RAWINPUTHEADER)Marshal.PtrToStructure(buf, typeof(RAWINPUTHEADER));
+                            if (_loggedDev.Add(hdr.Dev))
+                            {
+                                try
+                                {
+                                    Log?.Invoke("raw dev type " + hdr.Type + ": " +
+                                        DeviceName(hdr.Dev));
+                                }
+                                catch { }
+                            }
                             if (hdr.Type == 0)
                             {
                                 // Real mouse (guns are digitizer + keyboard):
-                                // remember where the user's cursor is (Change 4).
+                                // remember where the user left the cursor.
                                 if (GetCursorPos(out var pt))
                                 {
-                                    MouseX = pt.X; MouseY = pt.Y;
-                                    HaveMousePos = true;
+                                    AnchorX = pt.X; AnchorY = pt.Y; HaveAnchor = true;
                                 }
                             }
                             else

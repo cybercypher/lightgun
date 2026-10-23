@@ -40,6 +40,7 @@ namespace GaimeTray
         readonly Queue<string> _pendingCal = new Queue<string>();
         CalibrationWindow _calib;
         string _calibSn;
+        ShootingGallery _gallery;
         RawInputWindow _raw;
         readonly SynchronizationContext _ui;
         bool _threadsOn;
@@ -78,6 +79,7 @@ namespace GaimeTray
             foreach (var s in sns) AddGun(s, numbering, silent: true);
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
             _raw = new RawInputWindow(OnPointer, OnKey);
+            RawInputWindow.Log = s => Emit("raw: " + s);
             _raw.FormClosed += (s, e) => DisposePads();
             _raw.Show(); // invisible (Opacity 0): exists only for INPUTSINK
             Feeding = true;
@@ -93,6 +95,7 @@ namespace GaimeTray
         {
             if (!Feeding) return;
             Feeding = false;
+            try { _gallery?.Close(); } catch { }
             try
             {
                 if (_calib != null)
@@ -128,6 +131,23 @@ namespace GaimeTray
                     g.TestTriggerUntil = DateTime.UtcNow.AddMilliseconds(ms);
                     Emit(g.Label + ": test pulse");
                 }
+        }
+
+        // Open the fullscreen shooting gallery. Needs the raw-input capture that
+        // only exists while feeding, so it reports false if stopped.
+        public bool OpenGallery()
+        {
+            if (!Feeding) return false;
+            if (_gallery != null && !_gallery.IsDisposed)
+            {
+                _gallery.Activate();
+                return true;
+            }
+            _gallery = new ShootingGallery();
+            _gallery.FormClosed += (s, e) => _gallery = null;
+            _gallery.Show();
+            _gallery.Activate();
+            return true;
         }
 
         public List<GunSnapshot> Snapshot()
@@ -303,14 +323,27 @@ namespace GaimeTray
         {
             try
             {
+                // The gun is a system digitizer, so Windows has just moved the
+                // OS cursor from this report. Put it back before any
+                // calibration/feed gating, so the pointer never moves - even
+                // for a gun that is not calibrated yet.
+                RawInputWindow.PinCursor();
+
                 _latest[sn] = (x, y);
-                if (!_guns.TryGetValue(sn, out var g) || g.Calib == null) return;
+                if (!_guns.TryGetValue(sn, out var g)) return;
                 bool was = g.TriggerDown;
+                // Device state (filter, debounce, rate) does not need a
+                // calibration, so update it first: the gallery must see a gun
+                // that is not calibrated yet, and calibration itself needs the
+                // debounced trigger edge.
                 g.PushPointer(x, y, tip, true);
+                bool pressed = g.TriggerDown && !was;
+                _gallery?.OnPointer(g, pressed);
+                if (g.Calib == null) return;
                 if (g.TriggerDown != was)
                     Emit(g.Label + ": trigger " + (g.TriggerDown ? "DOWN" : "UP") +
                         " raw=(" + x + "," + y + ") tip=" + tip);
-                if (g.TriggerDown && !was && _calib != null)
+                if (pressed && _calib != null)
                 {
                     if (_calibSn == null)
                     {
@@ -320,7 +353,6 @@ namespace GaimeTray
                     if (sn == _calibSn) _calib.TriggerSample();
                 }
                 Feed(g);
-                CursorBodyguard(g);
             }
             catch (Exception ex) { Emit("OnPointer ERROR: " + ex.Message); }
         }
@@ -360,25 +392,6 @@ namespace GaimeTray
                 p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH,
                        inside && g.ValidLock, g, down);
             }
-        }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        static extern bool SetCursorPos(int X, int Y);
-
-        // Cursor bodyguard (Change 4): the gun is a system touchscreen, so
-        // Windows drives the OS cursor straight from it. While a gun is
-        // idle-wandering (valid-lock gate off) its stray reports would throw
-        // the cursor around — restore it to the real mouse's last known
-        // position instead of parking at (0,0). While a gun has a valid lock,
-        // leave the cursor alone so it tracks aim.
-        // Freshness gate: only act on a live report (500 ms), never strand the
-        // cursor.
-        void CursorBodyguard(GunState g)
-        {
-            if ((DateTime.UtcNow - g.LastReport).TotalMilliseconds > 500) return;
-            if (g.ValidLock) return;
-            if (!RawInputWindow.HaveMousePos) return;
-            SetCursorPos(RawInputWindow.MouseX, RawInputWindow.MouseY);
         }
 
         // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.

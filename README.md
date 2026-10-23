@@ -60,9 +60,15 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
   (on-device serials, stable across reboots/ports — see `docs/identity.md`).
   Gun number = ViGEm pad number (J1/J2), forever, created in pad-index order.
 - Aim is forwarded only on a valid on-screen lock (~200+ Hz); idle wander
-  (<60 Hz) is dropped so the virtual stick holds. Idle cursor wander is
-  countered by restoring the OS cursor to the real mouse (cursor bodyguard).
-- F12 = recalibrate, ESC = quit.
+  (<60 Hz) is dropped so the virtual stick holds. The OS cursor never moves
+  while feeding: every gun report is followed by restoring the cursor to the
+  real mouse's last position (see `PinCursor` in `RawInput.cs`).
+- **Test button** (or Ctrl+T, or `GaimeTray.exe --test`) opens a fullscreen
+  shooting gallery. Shots are drawn where `RectCalib.Map()` puts them — the same
+  numbers the pad receives — so it checks the real calibration: one ring target,
+  a hit scores and moves it, and the HUD shows raw, mapped, IN/OUT, Hz/LOCK and
+  the distance from the last shot to the target centre in screen pixels.
+- F12 = recalibrate, ESC = quit (ESC also closes the gallery).
 
 ## Deployment — `C:\games\feeder`
 

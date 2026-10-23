@@ -17,6 +17,7 @@ namespace GaimeTray
         readonly GunCard _c2 = new GunCard();
         readonly Label _emptyHint, _statePill;
         readonly Button _startStop;
+        readonly Button _testBtn;
         readonly CheckBox _autostart;
         readonly RichTextBox _log = new RichTextBox();
         readonly Label[] _slots = new Label[4];
@@ -45,6 +46,7 @@ namespace GaimeTray
             KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.F12) RecalFirst();
+                if (e.Control && e.KeyCode == Keys.T) OpenGallery();
             };
 
             // header
@@ -67,6 +69,13 @@ namespace GaimeTray
                 FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(50, 50, 52), ForeColor = Fg,
             };
             _startStop.Click += (s, e) => Toggle();
+            _testBtn = new Button
+            {
+                Text = "Test", Location = new Point(630, 12), Size = new Size(70, 30),
+                FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(50, 50, 52), ForeColor = Fg,
+            };
+            _testBtn.Click += (s, e) => OpenGallery();
+            new ToolTip().SetToolTip(_testBtn, "Shooting gallery - checks the calibration (Ctrl+T)");
             _autostart = new CheckBox
             {
                 Text = "Start with Windows", Location = new Point(462, 16),
@@ -80,7 +89,7 @@ namespace GaimeTray
                 Location = new Point(462, 36), AutoSize = true,
                 ForeColor = Dim, BackColor = Panel, Font = new Font("Segoe UI", 8),
             };
-            head.Controls.AddRange(new Control[] { title, _statePill, _startStop, _autostart, trayNote });
+            head.Controls.AddRange(new Control[] { title, _statePill, _startStop, _testBtn, _autostart, trayNote });
             Controls.Add(head);
 
             // gun cards
@@ -212,6 +221,15 @@ namespace GaimeTray
         {
             if (_eng.Feeding) _eng.Stop(); else _eng.Start();
             RefreshChrome();
+        }
+
+        void OpenGallery()
+        {
+            if (_eng.OpenGallery()) return;
+            MessageBox.Show(this,
+                "Start feeding first: the gallery reads the guns through the same " +
+                "raw-input capture that feeds the pads.",
+                "Test gallery", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         void RecalFirst()
