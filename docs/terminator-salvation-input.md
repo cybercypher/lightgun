@@ -120,15 +120,17 @@ a tap or a hold — sticks it at that spot until release. Ruled out by test:
 | feeder | tray Test gallery while holding | tracks |
 | DemulShooter | TP lightgun = None, DS attached, 984 events | reticle stays at centre, DS cannot feed this build |
 | trigger pulse | feeder square-wave trigger (160/500 ms) | gun fires in bursts; reticle still sticks |
+| gun touch contact | trigger held 10 s while the bridge ran a square pattern, tray stopped | cursor followed, 751 samples, no plateau — Windows does not suppress the Pico |
 
-Only a release of the **physical** trigger refreshes the aim, so the cause is
-upstream of the Pico button state: either the gun's digitizer touch contact
-makes Windows suppress the Pico's absolute-mouse updates, or TP latches the
-gun position while its trigger input is down.
+Only a release of the **physical** trigger refreshes the aim. Holding **B
+(right / reload) freezes nothing**, so the latch is tied to the trigger role,
+not to buttons on the lightgun device. Windows is ruled out (above), so the
+latch is inside TP: most likely TP latches the aim on the **left mouse
+button** while firing is serviced from the `Trigger P1` *binding*.
 
-Deciding test: with the tray stopped, hold the trigger and drive the bridge
-while watching `GetCursorPos` (`tools/win/CursorWatch.ps1`). A frozen cursor
-while the trigger is held proves the Windows/touch theory.
+Next tests: bind `Trigger P1` to `MiddleButton` (gun's A) and hold it while
+sweeping; if that still latches, put the trigger on the Pico's second mouse
+(MI_01) with MI_00 kept button-free.
 
 TP input facts confirmed: `Trigger P1` must be a **mouse** button on the
 lightgun device (keyboard bindings never reach the RawThrills board, which is
