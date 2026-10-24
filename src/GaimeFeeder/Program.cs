@@ -153,6 +153,7 @@ namespace GaimeFeeder
 
         static void EnsurePads()
         {
+            if (OutputConfig.UsePico) return;   // bridge output: no ViGEm pads
             // Deterministic slots (Change 2): ViGEmBus hands out XInput slots in
             // connection order, so create pads in pad-index order to guarantee
             // sn11111 = slot 1 / sn22222 = slot 2.
@@ -340,19 +341,23 @@ namespace GaimeFeeder
 
         static void Feed(GunState g)
         {
-            if (!Pads.TryGetValue(g.Serial, out var p)) return;
             bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
             bool testStick = DateTime.UtcNow < g.TestStickUntil;
             bool testBtn = DateTime.UtcNow < g.TestBtnUntil;
+            bool pico = OutputConfig.UsePico;
+
             if (g.Calib == null)
             {
-                // Binding mode: submit only while a test pulse is active.
+                // Binding mode is a ViGEm-only aid; the bridge has no sticks.
+                if (pico) return;
+                if (!Pads.TryGetValue(g.Serial, out var bindPad)) return;
                 if (testTrig || testStick || testBtn)
-                    p.Feed(960 + (testStick ? g.TestStickX * 900 : 0),
-                           540 + (testStick ? g.TestStickY * 500 : 0),
-                           1920, 1080, true, g, testTrig);
+                    bindPad.Feed(960 + (testStick ? g.TestStickX * 900 : 0),
+                                 540 + (testStick ? g.TestStickY * 500 : 0),
+                                 1920, 1080, true, g, testTrig);
                 return;
             }
+
             bool down = g.TriggerDown || testTrig;
             var (sx, sy, inside) = g.Calib.Map(down && !testTrig ? g.LatchedX : g.RawX,
                                                down && !testTrig ? g.LatchedY : g.RawY);
@@ -361,6 +366,16 @@ namespace GaimeFeeder
                 sx = (g.Calib.ScreenW - 1) / 2 + g.TestStickX * (g.Calib.ScreenW - 1) / 2;
                 sy = (g.Calib.ScreenH - 1) / 2 + g.TestStickY * (g.Calib.ScreenH - 1) / 2;
             }
+
+            if (pico)
+            {
+                // Absolute mouse: no ValidLock gate; offscreen pull = right.
+                PicoOutput.Feed(g.PadIndex - 1, sx, sy,
+                                g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
+                return;
+            }
+
+            if (!Pads.TryGetValue(g.Serial, out var p)) return;
             // Change 3: aim only on a valid on-screen lock (fast stream + inside
             // calibration bounds); otherwise write nothing and let the pad hold.
             // Test pulses bypass the gate so diagnostics still reach the pad.

@@ -3,6 +3,15 @@
 Date: 2026-10-23
 Status: research + plan, not yet implemented
 
+> **2026-10-23 correction:** the claim below that ViGEm pads are not a
+> DemulShooter path is **wrong**. ViGEmBus exposes a HID gamepad interface
+> (usage `0x01/0x05`, report ID 0, absolute axes), DS registers that usage, and
+> DS 17.10 binds it (`P1 device plugged and found`). The earlier failure was a
+> stale device path plus the wrong trigger button, not a missing device class.
+> See `HANDOFF.md` §6a and `docs/phase0-evidence.md`. Consequences: vJoy is not
+> required for DS, and the Pico bridge is optional (TP-native / mouse-only
+> consumers), not the critical path.
+
 Goal: make the two G'AIM'E guns behave like Sinden / Gun4IR / AimTrak / X-Gunner
 for PC lightgun games — easy DemulShooter setup, working trigger, calibration
 that reaches the game, and both guns at once in 2-player titles.
@@ -97,7 +106,11 @@ every consumer downstream receives already-screen-correct coordinates.**
 
 ## 4. Architecture options
 
-### A. vJoy HID output (recommended first)
+### A. vJoy HID output (superseded 2026-10-23)
+
+> The ViGEm HID gamepad path in the correction note at the top already gives DS
+> an absolute device; vJoy is no longer required for DS. This option remains a
+> fallback/reference.
 
 vJoy creates signed, **absolute** HID joystick devices:
 

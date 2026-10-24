@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace GaimeFeeder
@@ -33,15 +34,70 @@ namespace GaimeFeeder
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
         [DllImport("user32.dll")] static extern bool SetCursorPos(int X, int Y);
 
-        // Cursor anchor: the guns are digitizer + keyboard and never expose a
-        // mouse, so every RawInput mouse report is the user's real mouse.
-        // Remember where it leaves the OS cursor; PinCursor() puts the cursor
-        // back there after every gun report. Windows itself moves the cursor
-        // from the digitizer, so snapping back is the only way to keep the
+        // Cursor anchor: named RawInput mice are the user's real mouse (the
+        // guns are digitizer + keyboard). Windows also synthesizes mouse
+        // reports for the gun's touch digitizer with an empty device name;
+        // those are filtered below and must never move the anchor.
+        // Remember where the user leaves the OS cursor; PinCursor() and the
+        // guard thread put the cursor back there. Windows moves the cursor
+        // from the digitizer, so holding it is the only way to keep the
         // pointer still without a filter driver (RIDEV_NOLEGACY only suppresses
         // this app's legacy messages, not the system cursor).
         public static int AnchorX, AnchorY;
         public static volatile bool HaveAnchor;
+
+        // Continuous guard. PinCursor() alone runs only when a report arrives,
+        // but Windows applies the digitizer's mouse movement after the WM_INPUT
+        // handler, so the cursor alternates between the anchor and the gun at
+        // report rate (measured 2026-10-23: 987 digitizer + 412 synthetic-mouse
+        // reports in 10 s, cursor visibly bouncing). A 1 ms thread holds the
+        // anchor; it stands down for 250 ms after real mouse movement so the
+        // user's mouse is never fought.
+        static volatile bool _guardRun;
+        // TickCount64 + Volatile so the loop always re-reads these. A bare
+        // non-volatile field let the JIT hoist the read and the guard kept
+        // fighting the real mouse (measured 2026-10-23).
+        static long _mouseActiveUntil;
+        static long _gunActiveUntil;
+        static Thread _guard;
+
+        // Pin only while a gun has a valid tracking lock. A gun that is idle or
+        // unlocked must not hold the cursor: that is what stole the user's
+        // mouse while drawing. NoteGunLock() is called from GunState.PushPointer
+        // for both apps; the 500 ms tail keeps the pin alive between reports.
+        public static void NoteGunLock(bool locked)
+        {
+            if (locked) Volatile.Write(ref _gunActiveUntil, Environment.TickCount64 + 500);
+        }
+        static bool GunActive => Environment.TickCount64 < Volatile.Read(ref _gunActiveUntil);
+        [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
+        [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint ms);
+
+        static void StartCursorGuard()
+        {
+            if (_guard != null) return;
+            _guardRun = true;
+            timeBeginPeriod(1);
+            _guard = new Thread(() =>
+            {
+                while (_guardRun)
+                {
+                    try
+                    {
+                        if (HaveAnchor && GunActive &&
+                            Environment.TickCount64 >= Volatile.Read(ref _mouseActiveUntil))
+                        {
+                            if (GetCursorPos(out var p) && (p.X != AnchorX || p.Y != AnchorY))
+                                SetCursorPos(AnchorX, AnchorY);
+                        }
+                    }
+                    catch { }
+                    Thread.Sleep(1);
+                }
+            })
+            { IsBackground = true, Name = "CursorGuard", Priority = ThreadPriority.AboveNormal };
+            _guard.Start();
+        }
 
         // Diagnostic sink (the tray wires this to its log). One line per raw
         // device on first sight is cheap and answers "which device is this?".
@@ -52,6 +108,7 @@ namespace GaimeFeeder
         // per gun pointer report; a no-op when the cursor is already there.
         public static void PinCursor()
         {
+            if (!GunActive) return;
             if (!HaveAnchor)
             {
                 if (!GetCursorPos(out var seed)) return;
@@ -91,7 +148,18 @@ namespace GaimeFeeder
                     new RAWINPUTDEVICE { Page = 0x01, Usage = 0x06, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
                     new RAWINPUTDEVICE { Page = 0x01, Usage = 0x02, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
                 }, 3, (uint)Marshal.SizeOf(typeof(RAWINPUTDEVICE)));
+                StartCursorGuard();
             };
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _guardRun = false;
+                try { timeEndPeriod(1); } catch { }
+            }
+            base.Dispose(disposing);
         }
 
         string DeviceName(IntPtr h)
@@ -126,18 +194,44 @@ namespace GaimeFeeder
                                 }
                                 catch { }
                             }
+                            string name = DeviceName(hdr.Dev);
                             if (hdr.Type == 0)
                             {
-                                // Real mouse (guns are digitizer + keyboard):
-                                // remember where the user left the cursor.
-                                if (GetCursorPos(out var pt))
+                                // Windows synthesizes mouse reports for the gun's
+                                // touch digitizer. They arrive with an empty device
+                                // name and huge deltas, and they are not the user's
+                                // mouse. Re-anchoring from them makes the anchor
+                                // follow the gun, which is exactly what PinCursor
+                                // is meant to prevent (measured 2026-10-23: 412
+                                // such reports vs 0 real-mouse reports in 10 s,
+                                // cursor swept 335..3801 px).
+                                bool gunSyntheticMouse = name.Length == 0 ||
+                                    name.IndexOf("VID_2E2C", StringComparison.OrdinalIgnoreCase) >= 0;
+                                if (gunSyntheticMouse)
                                 {
-                                    AnchorX = pt.X; AnchorY = pt.Y; HaveAnchor = true;
+                                    PinCursor();
+                                }
+                                else
+                                {
+                                    // MOUSEINPUT starts right after the header:
+                                    // dx at +0, dy at +4 (the old +12/+16 read
+                                    // dwFlags/time and was meaningless).
+                                    int dx = Marshal.ReadInt32(buf, (int)hsz);
+                                    int dy = Marshal.ReadInt32(buf, (int)hsz + 4);
+                                    if (dx != 0 || dy != 0)
+                                    {
+                                        // Real movement: let the user's mouse win
+                                        // for a full second, then resume guarding.
+                                        if (GetCursorPos(out var pt))
+                                        {
+                                            AnchorX = pt.X; AnchorY = pt.Y; HaveAnchor = true;
+                                        }
+                                        Volatile.Write(ref _mouseActiveUntil, Environment.TickCount64 + 1000);
+                                    }
                                 }
                             }
                             else
                             {
-                                string name = DeviceName(hdr.Dev);
                                 var gm = GaimePath.Match(name);
                                 if (gm.Success)
                                 {

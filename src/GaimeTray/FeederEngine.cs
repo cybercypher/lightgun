@@ -83,6 +83,9 @@ namespace GaimeTray
             _raw.FormClosed += (s, e) => DisposePads();
             _raw.Show(); // invisible (Opacity 0): exists only for INPUTSINK
             Feeding = true;
+            Emit(OutputConfig.UsePico
+                ? "Output: Pico bridge (" + PicoOutput.Probe() + ")"
+                : "Output: ViGEm pads");
             Emit(sns.Count == 0
                 ? "No guns: binding mode (plug a gun any time, attaches in ~10 s)."
                 : "Feeding: " + string.Join(", ", sns));
@@ -248,6 +251,7 @@ namespace GaimeTray
         void EnsurePads()
         {
             if (!Feeding) return;
+            if (OutputConfig.UsePico) return;   // bridge output: no ViGEm pads
             lock (_guns) lock (_pads)
             {
                 // Deterministic slots (Change 2): ViGEmBus hands out XInput slots
@@ -371,6 +375,12 @@ namespace GaimeTray
                     case 0x51: g.BtnStart = down; break;
                     default: return;
                 }
+                bool hadCal = g.Calib != null;
+                _gallery?.OnGunKey(g, vkey, down);
+                // A gun calibrated for the first time inside the gallery had no
+                // pad (EnsurePads skips uncalibrated guns). Create it now so the
+                // very next report feeds the stick.
+                if (!hadCal && g.Calib != null) EnsurePads();
                 Feed(g);
             }
             catch (Exception ex) { Emit("OnKey ERROR: " + ex.Message); }
@@ -378,15 +388,25 @@ namespace GaimeTray
 
         void Feed(GunState g)
         {
+            bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
+            if (g.Calib == null) return;
+            bool down = g.TriggerDown || testTrig;
+            var (sx, sy, inside) = g.Calib.Map(
+                down && !testTrig ? g.LatchedX : g.RawX,
+                down && !testTrig ? g.LatchedY : g.RawY);
+
+            if (OutputConfig.UsePico)
+            {
+                // Absolute mouse: no ValidLock gate, and an offscreen pull is
+                // sent as the right button (DemulShooter's reload for mice).
+                PicoOutput.Feed(g.PadIndex - 1, sx, sy,
+                                g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
+                return;
+            }
+
             lock (_pads)
             {
                 if (!_pads.TryGetValue(g.Serial, out var p)) return;
-                bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
-                if (g.Calib == null) return;
-                bool down = g.TriggerDown || testTrig;
-                var (sx, sy, inside) = g.Calib.Map(
-                    down && !testTrig ? g.LatchedX : g.RawX,
-                    down && !testTrig ? g.LatchedY : g.RawY);
                 // Change 3: aim only on a valid on-screen lock (fast stream +
                 // inside calibration bounds); otherwise write nothing and let
                 // the pad hold its last position.

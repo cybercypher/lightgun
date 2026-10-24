@@ -36,6 +36,12 @@ namespace GaimeFeeder
         }
 
         public static string GunsJson => Path.Combine(Root, "guns.json");
+        // "pico" (default) or "vigem"; one output at a time, never both.
+        public static string OutputConfig => Path.Combine(Root, "output.txt");
+        // Optional list of game process names that unlock the bridge output.
+        public static string BridgeProcesses => Path.Combine(Root, "bridge-processes.txt");
+        // Debug switch: while this file exists, stream regardless of foreground.
+        public static string BridgeForce => Path.Combine(Root, "bridge-force-on.txt");
         public static string Calibrations => Path.Combine(Root, "calibrations");
         public static string Logs => Path.Combine(Root, "logs");
     }

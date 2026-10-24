@@ -43,6 +43,7 @@ namespace GaimeFeeder
         [DllImport("kernel32.dll")] static extern bool CancelIo(IntPtr h);
 
         static Dictionary<string, string> _suffixToSn;
+        static Dictionary<string, string> _snToVendor;
 
         public static List<string> EnumerateGunSns()
         {
@@ -55,9 +56,23 @@ namespace GaimeFeeder
         public static Dictionary<string, string> PathSuffixToSn() =>
             _suffixToSn ?? (_suffixToSn = BuildMap());
 
+        // The MI_02 vendor interface for one gun's system_info sn. Rebuilds the
+        // map first so a replug that moved the interface is picked up; returns
+        // null when the gun is not present or its sn could not be read.
+        public static string VendorPathForSn(string sn)
+        {
+            if (string.IsNullOrEmpty(sn)) return null;
+            _suffixToSn = BuildMap();
+            return _snToVendor.TryGetValue(sn, out var path) ? path : null;
+        }
+
         static Dictionary<string, string> BuildMap()
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // sn -> MI_02 path, refreshed on every build so callers never get a
+            // stale path after a replug.
+            var snToVendor = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _snToVendor = snToVendor;
             // suffix -> composite key, composite key -> MI_02 path
             var suffixToComposite = new Dictionary<string, string>();
             var compositeToVendor = new Dictionary<string, string>();
@@ -96,7 +111,9 @@ namespace GaimeFeeder
             foreach (var kv in compositeToVendor)
             {
                 string sn = QuerySn(kv.Value);
-                if (sn != null) snByComposite[kv.Key] = sn;
+                if (sn == null) continue;
+                snByComposite[kv.Key] = sn;
+                snToVendor[sn] = kv.Value;
             }
             foreach (var kv in suffixToComposite)
                 if (snByComposite.TryGetValue(kv.Value, out var sn)) map[kv.Key] = sn;

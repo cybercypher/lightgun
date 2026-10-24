@@ -194,6 +194,9 @@ namespace GaimeFeeder
                 if (_ivCount < LockWin) _ivCount++;
             }
             _lastTick = now;
+            // Only a real tracking lock may hold the OS cursor. Unlocked idle
+            // wander must never take the mouse away from the user.
+            RawInputWindow.NoteGunLock(ValidLock);
             // Latch ring stores filtered positions too: the pre-press latch must
             // not capture a glitch sample just before the trigger edge.
             _lx[_li] = fx; _ly[_li] = fy; _li = (_li + 1) % LatchN;

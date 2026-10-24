@@ -1,0 +1,25 @@
+﻿# DsDiag report 2026-10-23T12:19:20.7245543-07:00 listOnly=False index=6
+pid=83064 hwnd=402258 title=[DemulShooter Devices Diagnostic 16.0.0.0]
+device combo id=402350 items=17
+  [0] [Pointer] SteelSeries - SteelSeries QCK Prism Cloth
+  [1] [Pointer] SteelSeries - SteelSeries QCK Prism Cloth
+  [2] [Pointer] CORSAIR - HX1200i Power Supply
+  [3] [Pointer] Generic - USB Audio
+  [4] [Pointer] Razer Inc - BlackShark V3 Pro Xbox HID
+  [5] [Undefined] ASRock - LED Controller
+  [6] [Gamepad] Razer Inc - BlackShark V3 Pro Xbox HID
+  [7] [Pointer] Razer Inc - BlackShark V3 Pro Xbox HID
+  [8] [Mouse] Logitech - USB Receiver
+  [9] [Pointer] Razer Inc - BlackShark V3 Pro Xbox HID
+  [10] [Pointer] Logitech - USB Receiver
+  [11] [Pointer] SteelSeries - Apex Pro Gen 3
+  [12] [Pointer] Logitech - USB Receiver
+  [13] [Pointer] SteelSeries - Apex Pro Gen 3
+  [14] [Pointer] SteelSeries - Apex Pro Gen 3
+  [15] [Mouse] SteelSeries - Apex Pro Gen 3
+  [16] [Mouse] Logitech - USB Receiver
+--- [6] [Gamepad] Razer Inc - BlackShark V3 Pro Xbox HID ---
+details: Max: | Min: | Max: | Min: | Axis X: | 1 | 1 | Number of Buttons: | Axis Y: | BlackShark V3 Pro Xbox HID | Product: | 0 | Number of Axis: | Razer Inc | Manufacturer: | RIM_TYPEHID - Gamepad | DeviceType : | 0x1532 | VID: | 0x0A55 | PID: | OnClient : | 3840x2097 | Client Size : | 3840x2160 | Screen Size : | OnScreen : | RawInput : | Select a device :
+before-selection: Max: | Min: | Max: | Min: | Axis X: | Number of Buttons: | Axis Y: | Product: | Number of Axis: | Manufacturer: | DeviceType : | VID: | PID: | OnClient : | 3840x2097 | Client Size : | 3840x2160 | Screen Size : | OnScreen : | RawInput : | Select a device :
+live: no change (listed but silent to DS)
+report=\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\phase0\out\dsdiag-report.txt

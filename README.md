@@ -59,24 +59,30 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
 - Stable names in `guns.json`: Gun 1 = sn `11111`, Gun 2 = sn `22222`
   (on-device serials, stable across reboots/ports — see `docs/identity.md`).
   Gun number = ViGEm pad number (J1/J2), forever, created in pad-index order.
-- Aim is forwarded only on a valid on-screen lock (~200+ Hz); idle wander
-  (<60 Hz) is dropped so the virtual stick holds. The OS cursor never moves
-  while feeding: every gun report is followed by restoring the cursor to the
-  real mouse's last position (see `PinCursor` in `RawInput.cs`).
+- Aim is forwarded only on a valid on-screen lock (~200+ Hz); idle wander is
+  dropped so the virtual stick holds. The gun's digitizer also produces
+  synthetic mouse reports; those are filtered, and the OS cursor is pinned only
+  while a gun is locked and the real mouse has been idle (see `RawInput.cs`).
 - **Test button** (or Ctrl+T, or `GaimeTray.exe --test`) opens a fullscreen
   shooting gallery. Shots are drawn where `RectCalib.Map()` puts them — the same
   numbers the pad receives — so it checks the real calibration: one ring target,
   a hit scores and moves it, and the HUD shows raw, mapped, IN/OUT, Hz/LOCK and
   the distance from the last shot to the target centre in screen pixels.
-  **B** toggles a Sinden-style white reference border (shared with the
-  calibration window, which toggles it with the same key) and **F** toggles the
-  host-side smoothing. **M** switches to a hold-still measurement: the target
-  hides and a fixed centre mark appears, so there is an unambiguous place to
-  aim. Every B/F/M toggle (and closing the gallery) writes the settled
-  `noise N.N px, max jump M px, K samples` figures for the period that just
-  ended to `logs\tray-<date>.log`, so the comparison survives the window.
-  Border geometry lives in `ScreenBorder.cs` so the two windows cannot drift
-  apart.
+  Gun **Start** (Q) enters the box's **8-point gun calibration** without
+  leaving the gallery; keyboard **K** enters it unlocked, and the first gun to
+  pull the trigger locks the run to that serial. Aim at each lime target and
+  pull the trigger three times (one tap per 400 ms, eight targets, three taps
+  each); the gallery builds the eight vendor reports and sends them to the gun
+  (see `docs/box-calibration-protocol.md`). The host five-point bbox
+  calibration remains the tray Calibrate/F12 path and is separate. Gun **B**
+  toggles the hold-still measurement, gun **C** toggles the Sinden-style white
+  reference border (keyboard **V**, shared with the calibration window), **F**
+  toggles host-side smoothing and keyboard **M** toggles the measurement.
+  **ESC** closes the gallery. Every border/smoothing/measure toggle (and closing
+  the gallery) writes the settled `noise N.N px, max jump M px, K samples`
+  figures for the period that just ended to `logs\tray-<date>.log`, so the
+  comparison survives the window. Border geometry lives in `ScreenBorder.cs` so
+  the two windows cannot drift apart.
 - Aim is low-passed by a 1 euro filter on top of the median-of-5 spike
   rejection: heavy smoothing while still, light while moving. At ~478 Hz the
   rest-state time constant is ~40 ms but drops to a few ms during a fast sweep,

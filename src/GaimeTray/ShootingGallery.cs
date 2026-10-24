@@ -62,12 +62,24 @@ namespace GaimeTray
         DateTime _lastWaitPaint = DateTime.MinValue;
 
         // Wired to the tray log by FeederEngine. The noise figure is the whole
-        // point of the B/F toggles, so each toggle writes the period that just
-        // ended instead of leaving it on screen to be forgotten.
+        // point of the border/smoothing/measure toggles, so each toggle writes
+        // the period that just ended instead of leaving it on screen to be
+        // forgotten.
         public static Action<string> Log;
         Target _target;
         bool _live;
         bool _measure;
+
+        // Box-side 8-point calibration from inside the gallery. Start/Q toggles
+        // it, each trigger pull takes one tap; the first gun to pull (or press
+        // Start) owns the run. The reports go to the vendor interface, not to
+        // cal_<sn>.json.
+        bool _boxCal;
+        string _boxSerial, _boxLabel;
+        int _boxPoint, _boxTap;
+        readonly List<int[]> _boxPoints = new List<int[]>(GunBoxCal.PointCount);
+        readonly Dictionary<int, DateTime> _lastAction = new Dictionary<int, DateTime>();
+        DateTime _lastBoxTap = DateTime.MinValue;
 
         const double ShotLifeMs = 3000;
         public ShootingGallery()
@@ -91,15 +103,9 @@ namespace GaimeTray
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == Keys.Escape) { Close(); return true; }
-            if (keyData == Keys.B)
+            if (keyData == Keys.V)
             {
-                // Sinden-style white border, shared with the calibration window.
-                // Log the period that just ended, then clear: the with/without
-                // comparison is only honest if the samples restart.
-                LogNoise("border " + (ScreenBorder.Enabled ? "on" : "off"));
-                ScreenBorder.Enabled = !ScreenBorder.Enabled;
-                foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
-                Invalidate();
+                ToggleBorder();
                 return true;
             }
             if (keyData == Keys.F)
@@ -113,15 +119,168 @@ namespace GaimeTray
             }
             if (keyData == Keys.M)
             {
-                // Measure mode: fixed centre mark, target hidden, so "hold still"
-                // has an unambiguous place to hold.
-                if (_measure) LogNoise("measure end");
-                _measure = !_measure;
-                foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
-                Invalidate();
+                ToggleMeasure();
+                return true;
+            }
+            if (keyData == Keys.K)
+            {
+                // Keyboard entry stays unlocked: the first A picks the gun.
+                if (_boxCal) ExitBoxCal();
+                else EnterBoxCal(null);
                 return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        // Sinden-style white border, shared with the calibration window. Log the
+        // period that just ended, then clear: the with/without comparison is only
+        // honest if the samples restart.
+        void ToggleBorder()
+        {
+            LogNoise("border " + (ScreenBorder.Enabled ? "on" : "off"));
+            ScreenBorder.Enabled = !ScreenBorder.Enabled;
+            foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+            Invalidate();
+        }
+
+        // Measure mode: fixed centre mark, target hidden, so "hold still" has an
+        // unambiguous place to hold.
+        void ToggleMeasure()
+        {
+            if (_measure) LogNoise("measure end");
+            _measure = !_measure;
+            foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+            Invalidate();
+        }
+
+        // Called by the feeder for gun buttons (already on the UI thread). The
+        // OS also turns some gun buttons into ordinary keyboard keys, so B is
+        // deliberately absent from ProcessCmdKey: one press, one toggle.
+        public void OnGunKey(GunState g, int vkey, bool down)
+        {
+            if (g == null || !down) return;
+            switch (vkey)
+            {
+                case 0x42: if (Debounced(0x42)) ToggleMeasure(); break;
+                case 0x43: if (Debounced(0x43)) ToggleBorder(); break;
+                case 0x51:
+                    if (!Debounced(0x51)) break;
+                    if (_boxCal) ExitBoxCal();
+                    else EnterBoxCal(g);
+                    break;
+            }
+        }
+
+        // Gun buttons have no key-up repeat of their own, but the digitizer also
+        // emits keyboard keys and raw reports can double-fire; one action per
+        // 250 ms is plenty.
+        bool Debounced(int vkey)
+        {
+            var now = DateTime.UtcNow;
+            if (_lastAction.TryGetValue(vkey, out var last) &&
+                (now - last).TotalMilliseconds < 250) return false;
+            _lastAction[vkey] = now;
+            return true;
+        }
+
+        void EnterBoxCal(GunState g)
+        {
+            if (_measure) { LogNoise("measure end"); _measure = false; }
+            _boxCal = true;
+            _boxSerial = g?.Serial;
+            _boxLabel = g?.Label;
+            _boxPoint = 0;
+            _boxTap = 0;
+            _boxPoints.Clear();
+            _boxPoints.Add(new int[GunBoxCal.TapsPerPoint * 2]);
+            _lastBoxTap = DateTime.MinValue;
+            _target = null;
+            _shots.Clear();
+            Log?.Invoke("gallery [boxcal]: " + (g == null
+                ? "unlocked - first A picks the gun" : g.Label + " locked") +
+                ", point 1/8 tap 1/3");
+            Invalidate();
+        }
+
+        // Start/Q cancels: clearing here means a partial run is never sent.
+        void ExitBoxCal()
+        {
+            _boxCal = false;
+            _boxSerial = null;
+            _boxLabel = null;
+            _boxPoint = 0;
+            _boxTap = 0;
+            _boxPoints.Clear();
+            _target = null;
+            SpawnTarget();
+            Invalidate();
+        }
+
+        void SampleBoxCal(GunState g)
+        {
+            if (!_boxCal || _boxPoint >= GunBoxCal.PointCount ||
+                _boxTap >= GunBoxCal.TapsPerPoint) return;
+            if (_boxSerial != null && g.Serial != _boxSerial) return;
+            var now = DateTime.UtcNow;
+            if ((now - _lastBoxTap).TotalMilliseconds < 400) return;
+            _lastBoxTap = now;
+            if (_boxSerial == null)
+            {
+                _boxSerial = g.Serial;
+                _boxLabel = g.Label;
+                Log?.Invoke("gallery [boxcal]: locked to " + g.Label);
+            }
+            var taps = _boxPoints[_boxPoint];
+            taps[_boxTap * 2] = g.RawX;
+            taps[_boxTap * 2 + 1] = g.RawY;
+            _boxTap++;
+            Log?.Invoke("gallery [boxcal]: " + _boxLabel + " point " +
+                (_boxPoint + 1) + "/8 tap " + _boxTap + "/3");
+            if (_boxTap >= GunBoxCal.TapsPerPoint)
+            {
+                if (_boxPoint >= GunBoxCal.PointCount - 1)
+                {
+                    FinishBoxCal(g);
+                    return;
+                }
+                _boxPoint++;
+                _boxTap = 0;
+                _boxPoints.Add(new int[GunBoxCal.TapsPerPoint * 2]);
+            }
+            Invalidate();
+        }
+
+        // Build all eight reports, then hand them to the gun's vendor interface.
+        // This is the box's calibration, so no cal_<sn>.json is written.
+        void FinishBoxCal(GunState g)
+        {
+            string serial = _boxSerial ?? g.Serial;
+            string label = _boxLabel ?? g.Label;
+            byte[][] reports = GunBoxCal.BuildReports(ClientSize.Width, ClientSize.Height,
+                _boxPoints, out string error);
+            if (reports == null)
+            {
+                Log?.Invoke("gallery [boxcal]: " + label + " build FAILED: " + error);
+                ExitBoxCal();
+                return;
+            }
+            bool ok;
+            try { ok = GunBoxCal.Send(serial, reports, out error); }
+            catch (Exception ex)
+            {
+                Log?.Invoke("gallery [boxcal]: " + label + " send FAILED: " + ex.Message);
+                ExitBoxCal();
+                return;
+            }
+            if (!ok)
+            {
+                Log?.Invoke("gallery [boxcal]: " + label + " send FAILED: " + error);
+                ExitBoxCal();
+                return;
+            }
+            foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+            Log?.Invoke("gallery [boxcal]: " + label + " sent 8 reports");
+            ExitBoxCal();
         }
 
         // Called by the feeder for every gun pointer report, calibrated or not.
@@ -170,6 +329,9 @@ namespace GaimeTray
             _live = true;
 
             if (!pressed) return;
+            // Box Cal consumes the trigger: each debounced pull is one tap, and
+            // a stray trigger must not score against a target that is not there.
+            if (_boxCal) { SampleBoxCal(g); return; }
 
             var shot = new Shot { Color = v.Color, When = DateTime.UtcNow, HasFix = v.HasFix };
             v.Shots++;
@@ -252,11 +414,14 @@ namespace GaimeTray
             gfx.Clear(Bg);
 
             ScreenBorder.Draw(gfx, ClientSize.Width, ClientSize.Height);
-            if (!_measure) DrawTarget(gfx);
+            if (!_boxCal && !_measure) DrawTarget(gfx);
             DrawCentreMark(gfx);
             DrawShots(gfx);
             DrawCrosshairs(gfx);
             DrawHud(gfx);
+            // On top of the HUD: the top-left and top-right corner targets sit
+            // where the status rows live, and the bright ring must stay legible.
+            if (_boxCal) DrawBoxCalTarget(gfx);
         }
 
         // Fixed centre reference. Always visible (dim) so there is a place to
@@ -307,6 +472,43 @@ namespace GaimeTray
             }
             using (var b = new SolidBrush(Amber))
                 gfx.FillEllipse(b, _target.X - 4, _target.Y - 4, 8, 8);
+        }
+
+        // Box Cal target: the box's square target is screenW/7, so its ring has
+        // radius screenW/14 and its centre is the same point the report uses.
+        void DrawBoxCalTarget(Graphics gfx)
+        {
+            if (!_boxCal) return;
+            var (cx, cy) = GunBoxCal.Centre(_boxPoint, ClientSize.Width, ClientSize.Height);
+            float k = Math.Max(1f, Math.Min(ClientSize.Width, ClientSize.Height) / 1200f);
+            float r = Math.Max(1f, ClientSize.Width / 14f);
+            using (var pen = new Pen(Lime, 4f))
+            {
+                gfx.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);
+                gfx.DrawEllipse(pen, cx - r * 0.62f, cy - r * 0.62f,
+                    r * 1.24f, r * 1.24f);
+                gfx.DrawLine(pen, cx - r - 22 * k, cy, cx + r + 10 * k, cy);
+                gfx.DrawLine(pen, cx, cy - r - 22 * k, cx, cy + r + 10 * k);
+            }
+            using (var b = new SolidBrush(Lime))
+                gfx.FillEllipse(b, cx - 4, cy - 4, 8, 8);
+            string s = "BOX CAL point " + (_boxPoint + 1) + "/8 tap " + (_boxTap + 1) +
+                "/3 — aim at the ring, pull the trigger (Start cancels)";
+            using (var f = new Font("Consolas", 16 * k, FontStyle.Bold))
+            {
+                var sz = gfx.MeasureString(s, f);
+                float tx = Math.Max(8, Math.Min(ClientSize.Width - sz.Width - 8,
+                    cx - sz.Width / 2));
+                float ty = cy < ClientSize.Height / 2
+                    ? cy + r + 16 * k
+                    : cy - r - sz.Height - 16 * k;
+                // The corner targets share space with the HUD; a solid backing
+                // keeps the instruction readable over the status rows.
+                using (var bg = new SolidBrush(Bg))
+                    gfx.FillRectangle(bg, tx - 6, ty - 3, sz.Width + 12, sz.Height + 6);
+                using (var b = new SolidBrush(Lime))
+                    gfx.DrawString(s, f, b, tx, ty);
+            }
         }
 
         void DrawShots(Graphics gfx)
@@ -364,9 +566,10 @@ namespace GaimeTray
             // entry the first time and threw IndexOutOfRange mid-paint.
             var rows = new List<(string Text, Color Color)>
             {
-                ("G'AIM'E  calibration gallery   ·   ESC to close   ·   B = white border " +
-                 (ScreenBorder.Enabled ? "ON" : "OFF") + "   ·   F = smoothing " +
-                 (GunState.Smoothing ? "ON" : "OFF"), Color.White),
+                ("trigger = box cal tap · B = measure · C = border · Start = box cal · F = smoothing", Color.White),
+                ("G'AIM'E  calibration gallery   ·   ESC to close   ·   V = border " +
+                 (ScreenBorder.Enabled ? "ON" : "OFF") + "   ·   smoothing " +
+                 (GunState.Smoothing ? "ON" : "OFF") + "   ·   M = measure   ·   K = box cal (unlocked)", Dim),
                 ("", Dim),
             };
 
@@ -403,9 +606,17 @@ namespace GaimeTray
             }
 
             rows.Add(("", Dim));
-            rows.Add((_measure
-                ? "MEASURE - aim at the centre mark and hold still; press M when done (the figure is written to the log)"
-                : "aim at the ring, pull the trigger   ·   B = border (Sinden-style)   ·   F = smoothing   ·   M = measure noise", Dim));
+            string footer;
+            if (_boxCal)
+                footer = "BOX CAL point " + (_boxPoint + 1) + "/8 tap " + (_boxTap + 1) +
+                    "/3 — aim at the ring, pull the trigger (Start cancels)" +
+                    (_boxSerial == null ? "   ·   unlocked: first A picks the gun"
+                                        : "   ·   " + _boxLabel);
+            else if (_measure)
+                footer = "MEASURE - aim at the centre mark and hold still; press B (or M) when done (the figure is written to the log)";
+            else
+                footer = "aim at the ring, pull the trigger   ·   gun: B = measure, C = border, Start = box cal";
+            rows.Add((footer, Dim));
 
             float k = Math.Max(1f, Math.Min(ClientSize.Width, ClientSize.Height) / 1200f);
             using (var f = new Font("Consolas", 15 * k))
