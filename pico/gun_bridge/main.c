@@ -26,7 +26,9 @@
 #define REPORT_PERIOD_MS   4     // <= 250 Hz
 
 typedef struct {
-    uint8_t  buttons;            // bit0 left, bit1 right, bit2 middle
+    uint8_t  buttons;            // bit0 left, bit1 right, bit2 middle,
+                                 // bit3 back, bit4 forward
+    int8_t   wheel;              // -127..127, applied once then cleared
     uint16_t x;                  // 0..32767
     uint16_t y;                  // 0..32767
     bool     dirty;
@@ -35,8 +37,8 @@ typedef struct {
 // Nothing is reported until the host sends a frame: an absolute mouse that
 // reports unprompted fights any real mouse sharing the desktop cursor.
 static mouse_state_t mice[MOUSE_COUNT] = {
-    { .buttons = 0, .x = 0, .y = 0, .dirty = false },
-    { .buttons = 0, .x = 0, .y = 0, .dirty = false },
+    { .buttons = 0, .wheel = 0, .x = 0, .y = 0, .dirty = false },
+    { .buttons = 0, .wheel = 0, .x = 0, .y = 0, .dirty = false },
 };
 
 static uint32_t last_tx_ms[MOUSE_COUNT];
@@ -67,19 +69,21 @@ static bool send_mouse(uint8_t index)
         return false;
     }
 
-    uint8_t report[5] = {
-        (uint8_t) (mice[index].buttons & 0x07),
+    // 6-byte report: buttons, wheel, x16, y16
+    uint8_t report[6] = {
+        (uint8_t) (mice[index].buttons & 0x1F),
+        (uint8_t) mice[index].wheel,
         (uint8_t) (mice[index].x & 0xFF),
         (uint8_t) (mice[index].x >> 8),
         (uint8_t) (mice[index].y & 0xFF),
         (uint8_t) (mice[index].y >> 8),
     };
 
-    // Windows ignores an all-zero absolute-mouse report (no buttons, 0/0), so
-    // nudge the origin by one raw unit. 1/32767 is well under a pixel.
-    if ((report[0] | report[1] | report[2] | report[3] | report[4]) == 0) {
-        report[1] = 1;
-        report[3] = 1;
+    // Windows ignores an all-zero absolute-mouse report (no buttons, no wheel,
+    // 0/0), so nudge the origin by one raw unit. 1/32767 is under a pixel.
+    if ((report[0] | report[1] | report[2] | report[3] | report[4] | report[5]) == 0) {
+        report[2] = 1;
+        report[4] = 1;
     }
 
     return tud_hid_n_report(index, 0, report, sizeof(report));
@@ -97,7 +101,8 @@ static void apply_frame(const uint8_t *frame)
     if (x > 32767) x = 32767;
     if (y > 32767) y = 32767;
 
-    mice[player].buttons = (uint8_t) (frame[4] & 0x07);
+    mice[player].buttons = (uint8_t) (frame[4] & 0x1F);
+    mice[player].wheel = (int8_t) frame[5];
     mice[player].x = x;
     mice[player].y = y;
     mice[player].dirty = true;
@@ -216,6 +221,12 @@ int main(void)
                 if (send_mouse(i)) {
                     mice[i].dirty = false;
                     last_tx_ms[i] = now;
+                    // Wheel is a delta: follow a tick with a zero-wheel report
+                    // so the host does not keep scrolling.
+                    if (mice[i].wheel != 0) {
+                        mice[i].wheel = 0;
+                        mice[i].dirty = true;
+                    }
                 }
             }
         }

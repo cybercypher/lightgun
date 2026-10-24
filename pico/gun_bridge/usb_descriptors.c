@@ -50,16 +50,22 @@ uint8_t const desc_hid_report[] = {
     0xA1, 0x00,        //   Collection (Physical)
     0x05, 0x09,        //     Usage Page (Button)
     0x19, 0x01,        //     Usage Minimum (1)
-    0x29, 0x03,        //     Usage Maximum (3)
+    0x29, 0x05,        //     Usage Maximum (5)
     0x15, 0x00,        //     Logical Minimum (0)
     0x25, 0x01,        //     Logical Maximum (1)
-    0x95, 0x03,        //     Report Count (3)
+    0x95, 0x05,        //     Report Count (5)
     0x75, 0x01,        //     Report Size (1)
     0x81, 0x02,        //     Input (Data,Var,Abs)
     0x95, 0x01,        //     Report Count (1)
-    0x75, 0x05,        //     Report Size (5)  padding
+    0x75, 0x03,        //     Report Size (3)  padding
     0x81, 0x03,        //     Input (Cnst,Var,Abs)
     0x05, 0x01,        //     Usage Page (Generic Desktop)
+    0x09, 0x38,        //     Usage (Wheel)
+    0x15, 0x81,        //     Logical Minimum (-127)
+    0x25, 0x7F,        //     Logical Maximum (127)
+    0x75, 0x08,        //     Report Size (8)
+    0x95, 0x01,        //     Report Count (1)
+    0x81, 0x06,        //     Input (Data,Var,Rel)
     0x09, 0x30,        //     Usage (X)
     0x09, 0x31,        //     Usage (Y)
     0x15, 0x00,        //     Logical Minimum (0)
@@ -73,7 +79,7 @@ uint8_t const desc_hid_report[] = {
 
 uint16_t const desc_hid_report_len = sizeof(desc_hid_report);
 
-_Static_assert(sizeof(desc_hid_report) == 51, "HID report descriptor length");
+_Static_assert(sizeof(desc_hid_report) == 63, "HID report descriptor length");
 
 // ---------------------------------------------------------------------------
 // Configuration descriptor
@@ -106,7 +112,7 @@ static uint8_t const desc_configuration[] = {
     0x00,                  // bCountryCode
     0x01,                  // bNumDescriptors
     0x22,                  // descriptor type: report
-    51, 0x00,              // wDescriptorLength (desc_hid_report)
+    63, 0x00,              // wDescriptorLength (desc_hid_report)
 
     7, 0x05,               // ENDPOINT
     0x81,                  // IN, EP1
@@ -129,7 +135,7 @@ static uint8_t const desc_configuration[] = {
     0x00,
     0x01,
     0x22,
-    51, 0x00,
+    63, 0x00,
 
     7, 0x05,
     0x82,                  // IN, EP2

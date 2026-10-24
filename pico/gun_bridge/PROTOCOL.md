@@ -12,8 +12,8 @@ safe.
 | 1 | 1 | magic 1 | `0x5A` |
 | 2 | 1 | version | `0x01` |
 | 3 | 1 | player | `0` = mouse 1, `1` = mouse 2 |
-| 4 | 1 | buttons | bit0 left (trigger), bit1 right, bit2 middle |
-| 5 | 1 | reserved | send `0` |
+| 4 | 1 | buttons | bit0 left (trigger), bit1 right, bit2 middle, bit3 back, bit4 forward |
+| 5 | 1 | wheel | signed -127..127; one tick per frame, 0 otherwise |
 | 6 | 2 | x | u16 LE, `0..32767` |
 | 8 | 2 | y | u16 LE, `0..32767` |
 | 10 | 1 | seq | free-running counter, `0..255` |
@@ -73,5 +73,7 @@ Both frames verify with the CRC-8 in `host/gun_bridge_sender.py`.
   `0x02`, report ID 0, 5-byte input report
   `[buttons][x_lo][x_hi][y_lo][y_hi]`.
 - Interface 1 (`MI_01`): absolute HID mouse 2, same descriptor.
+- Report: 6 bytes - `[buttons][wheel][x_lo][x_hi][y_lo][y_hi]`; five buttons
+  (left, right, middle, back, forward) and a signed wheel delta.
 - Interfaces 2/3: CDC ACM (`COMx` on Windows), 115200 8N1 nominal (ignored by
   USB CDC; any baud works).

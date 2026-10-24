@@ -84,8 +84,8 @@ def main() -> int:
     if config[4] != 4:
         errors.append(f"bNumInterfaces {config[4]} != 4")
 
-    if len(hid) != 51:
-        errors.append(f"HID report descriptor is {len(hid)} bytes, expected 51")
+    if len(hid) != 63:
+        errors.append(f"HID report descriptor is {len(hid)} bytes, expected 63")
 
     # Walk the configuration descriptor.
     i = 0
@@ -122,29 +122,28 @@ def main() -> int:
         if str_index not in (0, STRID_MOUSE1, STRID_MOUSE2):
             errors.append(f"interface string index {str_index} does not exist")
 
-    # Count input bits in the HID report descriptor (3 buttons + 5 pad + 32).
-    # Report Count and Report Size may appear in either order.
+    # Count input bits by walking HID short items properly (the data byte of
+    # Logical Minimum -127 is 0x81 and must not be mistaken for an Input item).
     bits = 0
     count = 0
     size = 0
     i = 0
     while i < len(hid):
-        item = hid[i]
-        if item == 0x95 and i + 1 < len(hid):
-            count = hid[i + 1]
-            i += 2
-            continue
-        if item == 0x75 and i + 1 < len(hid):
-            size = hid[i + 1]
-            i += 2
-            continue
-        if item == 0x81:
+        b = hid[i]
+        data_size = (0, 1, 2, 4)[b & 0x03]
+        item_type = (b >> 2) & 0x03
+        tag = (b >> 4) & 0x0F
+        data = int.from_bytes(bytes(hid[i + 1:i + 1 + data_size]), "little") if data_size else 0
+        if item_type == 1 and tag == 9:      # Report Count (Global)
+            count = data
+        elif item_type == 1 and tag == 7:    # Report Size (Global)
+            size = data
+        elif item_type == 0 and tag == 8:
             bits += count * size
-            i += 2
-            continue
-        i += 1
-    if bits != 40:
-        errors.append(f"HID input report is {bits} bits, expected 40 (5 bytes)")
+        i += 1 + data_size
+
+    if bits != 48:
+        errors.append(f"HID input report is {bits} bits, expected 48 (6 bytes)")
 
     print(f"config: {len(config)} bytes, interfaces={len(interfaces)}, "
           f"endpoints={len(endpoints)}, HID report={len(hid)} bytes")

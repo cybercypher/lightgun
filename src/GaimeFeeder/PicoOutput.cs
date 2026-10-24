@@ -71,6 +71,7 @@ namespace GaimeFeeder
             File.Exists(AppPaths.BridgeForce) ||
             Environment.GetEnvironmentVariable("GAIME_BRIDGE_FORCE") == "1";
         static bool _active;
+        static bool _wasStreaming;
         static string _lastGate;
         static DateTime _nextGate = DateTime.MinValue;
         static readonly object LogLock = new object();
@@ -111,7 +112,20 @@ namespace GaimeFeeder
             int screenW, int screenH, bool inside, GunState g, bool trigger)
         {
             if (!Enabled) return;
-            if (!ShouldStream()) return;
+
+            if (!ShouldStream())
+            {
+                if (_wasStreaming)
+                {
+                    _wasStreaming = false;
+                    RawInputWindow.ReleaseBridgePin();
+                }
+                return;
+            }
+
+            _wasStreaming = true;
+            RawInputWindow.NoteBridgeActive();
+
             if (player < 0 || player > 1) return;
 
             double fx = Math.Clamp(sx / Math.Max(1.0, screenW - 1), 0.0, 1.0);
@@ -123,6 +137,8 @@ namespace GaimeFeeder
             if (trigger && inside) buttons |= 0x01;                 // left
             if ((trigger && !inside) || g.BtnB) buttons |= 0x02;    // right
             if (g.BtnA) buttons |= 0x04;                            // middle
+            if (g.BtnCoin) buttons |= 0x08;                         // back
+            if (g.BtnStart) buttons |= 0x10;                        // forward
 
             Send(player, x, y, buttons);
         }
@@ -273,6 +289,7 @@ namespace GaimeFeeder
             {
                 "DemulShooter", "DemulShooterX64", "TeknoParrot",
                 "EMULATOR", "emulator_multicpu",
+                "BudgieLoader", "game",
                 "pcsx2", "pcsx2x6", "rpcs3", "Dolphin", "PPSSPP",
                 "retroarch", "mame", "flycast", "supermodel",
                 "BigPEmu", "demul", "Fusion", "gens",

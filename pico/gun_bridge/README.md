@@ -67,7 +67,7 @@ Output: `pico/gun_bridge/build/gun_bridge.uf2`.
 - USB device: `G'AIM'E Bridge`, VID `1209`, PID `0A11`, serial
   `GAIME-BRIDGE-0001`, two interfaces:
   - `MI_00` — absolute mouse 1 (usage page `0x01`, usage `0x02`, report ID 0,
-    5-byte reports, logical range 0..32767).
+    6-byte reports (5 buttons + wheel + X/Y), logical range 0..32767).
   - `MI_01` — absolute mouse 2.
 - A CDC port (e.g. `COM7`).
 
@@ -126,7 +126,9 @@ which is exactly what this device is, so no patch or virtual pad is needed.
    powershell -ExecutionPolicy Bypass -File pico\gun_bridge\host\start_demulshooter.ps1 -Target model2 -Rom vcop2
    ```
 
-Trigger = left mouse button. Aim = the absolute X/Y in the report. DS scales
+Trigger = left mouse button; B = right, A = middle, Coin = back, Start =
+forward; the wheel carries a signed delta for testing. Aim = the absolute X/Y
+in the report. DS scales
 the device's absolute range to the **primary screen**, so keep Windows display
 scaling at 100% and run the game at the screen resolution (the same rules as
 Sinden/AimTrak).

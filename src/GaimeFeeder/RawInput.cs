@@ -70,6 +70,36 @@ namespace GaimeFeeder
             if (locked) Volatile.Write(ref _gunActiveUntil, Environment.TickCount64 + 500);
         }
         static bool GunActive => Environment.TickCount64 < Volatile.Read(ref _gunActiveUntil);
+
+        // While the Pico bridge streams, the absolute mouse owns the cursor and
+        // the gun's touch click acts wherever it sits. Hold the pointer at a
+        // fixed safe point - top-right, away from the taskbar's Show Desktop
+        // corner and the clock - so a trigger click cannot hit system UI.
+        static bool _bridgePin;
+
+        // Fixed safe anchor: top-right, away from the taskbar's Show Desktop
+        // corner (bottom-right) and the clock. Used whenever the guard runs.
+        static void SetSafeAnchor()
+        {
+            var bounds = Screen.PrimaryScreen.Bounds;
+            AnchorX = bounds.Width - 40;
+            AnchorY = 40;
+            HaveAnchor = true;
+        }
+
+        public static void NoteBridgeActive()
+        {
+            Volatile.Write(ref _gunActiveUntil, Environment.TickCount64 + 500);
+            if (_bridgePin) return;
+            _bridgePin = true;
+            SetSafeAnchor();
+        }
+
+        public static void ReleaseBridgePin()
+        {
+            _bridgePin = false;
+        }
+
         [DllImport("winmm.dll")] static extern uint timeBeginPeriod(uint ms);
         [DllImport("winmm.dll")] static extern uint timeEndPeriod(uint ms);
 
@@ -111,8 +141,7 @@ namespace GaimeFeeder
             if (!GunActive) return;
             if (!HaveAnchor)
             {
-                if (!GetCursorPos(out var seed)) return;
-                AnchorX = seed.X; AnchorY = seed.Y; HaveAnchor = true;
+                SetSafeAnchor();
                 return;
             }
             if (!GetCursorPos(out var pt)) return;
@@ -138,10 +167,7 @@ namespace GaimeFeeder
                 // Seed the anchor before the first gun report can move the
                 // cursor (a keyboard-only cabinet never produces a mouse
                 // report, but the pointer must still stay put).
-                if (GetCursorPos(out var seed))
-                {
-                    AnchorX = seed.X; AnchorY = seed.Y; HaveAnchor = true;
-                }
+                SetSafeAnchor();
                 RegisterRawInputDevices(new[]
                 {
                     new RAWINPUTDEVICE { Page = 0x0D, Usage = 0x04, Flags = RIDEV_INPUTSINK, Hwnd = Handle },
