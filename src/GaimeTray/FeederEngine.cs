@@ -389,11 +389,19 @@ namespace GaimeTray
         void Feed(GunState g)
         {
             bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
+            // Latch only for the press frame (so the trigger jolt cannot drag
+            // the shot), then track live while the trigger stays down. Holding
+            // the latch for the whole hold froze the aim: on the bridge that is
+            // "cannot shoot and move". Same rule as GaimeFeeder/Program.cs.
+            // Consume the flag even without a calibration, or it can go stale
+            // across one and fire one old-position click.
+            bool pressFrame = g.PressFramePending && !testTrig;
+            if (g.PressFramePending) g.PressFramePending = false;
             if (g.Calib == null) return;
             bool down = g.TriggerDown || testTrig;
             var (sx, sy, inside) = g.Calib.Map(
-                down && !testTrig ? g.LatchedX : g.RawX,
-                down && !testTrig ? g.LatchedY : g.RawY);
+                pressFrame ? g.LatchedX : g.RawX,
+                pressFrame ? g.LatchedY : g.RawY);
 
             if (OutputConfig.UsePico)
             {
