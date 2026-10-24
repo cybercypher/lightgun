@@ -26,6 +26,9 @@ syslog, TP's profile XML and DemulShooter's verbose log. Hypotheses are marked.
 - **Starting a game works from the gun:** at Mission Select, the trigger
   selects the mission card; the game then logs a 1P game state and plays the
   mission intro.
+- **Shoot-and-move works.** The trigger no longer freezes the aim: the tray
+  feeder was holding the pre-press latch for the whole hold (fixed 10:31,
+  confirmed in-game). See the last section.
 
 ## The working TP recipe (Terminator Salvation)
 
@@ -112,25 +115,38 @@ position and hijack the cursor), `tools/win/probe.sh` + `tools/aim_probe.py`
 ## 2026-10-24: the reticle sticks while the trigger is pressed
 
 Sweeping the gun moves the reticle smoothly; pressing the physical trigger —
-a tap or a hold — sticks it at that spot until release. Ruled out by test:
+a tap or a hold — sticks it at that spot until release.
 
 | link | test | result |
 |---|---|---|
 | Pico | bridge drove the cursor to four corners with left held | moves |
-| feeder | tray Test gallery while holding | tracks |
+| feeder | tray Test gallery while holding | **false pass**: the gallery maps `g.RawX/g.RawY` itself and never calls `Feed()`; it also doesn't stream while it is foreground |
 | DemulShooter | TP lightgun = None, DS attached, 984 events | reticle stays at centre, DS cannot feed this build |
-| trigger pulse | feeder square-wave trigger (160/500 ms) | gun fires in bursts; reticle still sticks |
+| trigger pulse | feeder square-wave trigger (160/500 ms) | gun fires in bursts; reticle still sticks — the feeder was sending latched coordinates the whole time |
 | gun touch contact | trigger held 10 s while the bridge ran a square pattern, tray stopped | cursor followed, 751 samples, no plateau — Windows does not suppress the Pico |
 
-Only a release of the **physical** trigger refreshes the aim. Holding **B
-(right / reload) freezes nothing**, so the latch is tied to the trigger role,
-not to buttons on the lightgun device. Windows is ruled out (above), so the
-latch is inside TP: most likely TP latches the aim on the **left mouse
-button** while firing is serviced from the `Trigger P1` *binding*.
+Holding **B (right / reload) freezes nothing**, so the freeze is tied to the
+trigger role, not to buttons on the lightgun device.
 
-Next tests: bind `Trigger P1` to `MiddleButton` (gun's A) and hold it while
-sweeping; if that still latches, put the trigger on the Pico's second mouse
-(MI_01) with MI_00 kept button-free.
+## 2026-10-24 10:31 — root cause was the tray feeder
+
+Not TP. `src/GaimeTray/FeederEngine.cs` mapped `LatchedX/Y` for the whole time
+`down` was true (`down = g.TriggerDown || testTrig`), so a held physical
+trigger froze the coordinates the Pico sent. TP never received a moving
+position to accept or reject; this also explains the pulse test — the pulse
+changes the Pico button, not `g.TriggerDown`, so the latch stayed applied. There
+is **no evidence TP latches anything**, and the `MiddleButton` / second-mouse
+tests were not needed.
+
+The 08:50 fix (`7c11de5`) had only changed `src/GaimeFeeder/Program.cs`, which
+the tray does not compile; the deployed tray was built from the old
+`FeederEngine.cs`. The gallery could not catch it because it maps raw
+coordinates directly, and `PicoOutput` only streams while a game is foreground.
+
+Fix: use `PressFramePending` for the press frame only, then live `RawX/RawY`
+while held; consume the flag before the uncalibrated return. Built, deployed
+and restarted 10:31; confirmed in-game that holding the trigger while sweeping
+tracks continuously.
 
 TP input facts confirmed: `Trigger P1` must be a **mouse** button on the
 lightgun device (keyboard bindings never reach the RawThrills board, which is
