@@ -67,6 +67,22 @@ namespace GaimeFeeder
         // streams while a game process is in the foreground. On the desktop the
         // Pico stays silent and the real mouse is free.
         static readonly HashSet<string> _games = LoadGames();
+        static readonly int _pulsePeriodMs = LoadPulsePeriod();
+        static int _pulseTick;
+
+        // bridge-pulse-trigger.txt: first line is the period in ms (default
+        // 160). 0 or a missing file disables the pulse.
+        static int LoadPulsePeriod()
+        {
+            try
+            {
+                if (!File.Exists(AppPaths.BridgePulseTrigger)) return 0;
+                var text = File.ReadAllText(AppPaths.BridgePulseTrigger).Trim();
+                if (int.TryParse(text, out int ms) && ms >= 40 && ms <= 2000) return ms;
+                return 160;
+            }
+            catch { return 0; }
+        }
         static readonly bool _force =
             File.Exists(AppPaths.BridgeForce) ||
             Environment.GetEnvironmentVariable("GAIME_BRIDGE_FORCE") == "1";
@@ -89,6 +105,9 @@ namespace GaimeFeeder
             lock (Gate)
             {
                 EnsureOpen();
+                Log(_pulsePeriodMs > 0
+                    ? "trigger pulse: " + _pulsePeriodMs + " ms square wave"
+                    : "trigger pulse: off");
                 return StatusLocked();
             }
         }
@@ -134,7 +153,17 @@ namespace GaimeFeeder
             int y = (int)Math.Round(fy * 32767.0);
 
             byte buttons = 0;
-            if (trigger && inside) buttons |= 0x01;                 // left
+            bool fire = trigger && inside;
+            if (fire && _pulsePeriodMs > 0)
+            {
+                // TP's gun board latches the position while the button is down
+                // (a held trigger freezes the aim). Fire in a square wave: the
+                // released half gives TP frames it will use to refresh the aim.
+                long phase = Environment.TickCount64 % _pulsePeriodMs;
+                fire = phase < (_pulsePeriodMs / 2);
+                _pulseTick++;
+            }
+            if (fire) buttons |= 0x01;                              // left
             if ((trigger && !inside) || g.BtnB) buttons |= 0x02;    // right
             if (g.BtnA) buttons |= 0x04;                            // middle
             if (g.BtnCoin) buttons |= 0x08;                         // back

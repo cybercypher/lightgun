@@ -107,3 +107,30 @@ dropdown item), `tools/win/BridgeServer.ps1` + `tools/win/bridge` (persistent
 CDC driver — opening the port per command makes the board re-emit its last
 position and hijack the cursor), `tools/win/probe.sh` + `tools/aim_probe.py`
 (aim accuracy).
+
+
+## 2026-10-24: the reticle sticks while the trigger is pressed
+
+Sweeping the gun moves the reticle smoothly; pressing the physical trigger —
+a tap or a hold — sticks it at that spot until release. Ruled out by test:
+
+| link | test | result |
+|---|---|---|
+| Pico | bridge drove the cursor to four corners with left held | moves |
+| feeder | tray Test gallery while holding | tracks |
+| DemulShooter | TP lightgun = None, DS attached, 984 events | reticle stays at centre, DS cannot feed this build |
+| trigger pulse | feeder square-wave trigger (160/500 ms) | gun fires in bursts; reticle still sticks |
+
+Only a release of the **physical** trigger refreshes the aim, so the cause is
+upstream of the Pico button state: either the gun's digitizer touch contact
+makes Windows suppress the Pico's absolute-mouse updates, or TP latches the
+gun position while its trigger input is down.
+
+Deciding test: with the tray stopped, hold the trigger and drive the bridge
+while watching `GetCursorPos` (`tools/win/CursorWatch.ps1`). A frozen cursor
+while the trigger is held proves the Windows/touch theory.
+
+TP input facts confirmed: `Trigger P1` must be a **mouse** button on the
+lightgun device (keyboard bindings never reach the RawThrills board, which is
+also why Start/Coin on Q/C do nothing), and with no lightgun assigned the game
+falls back to a centre reticle.

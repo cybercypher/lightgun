@@ -42,6 +42,11 @@ namespace GaimeFeeder
         public static string BridgeProcesses => Path.Combine(Root, "bridge-processes.txt");
         // Debug switch: while this file exists, stream regardless of foreground.
         public static string BridgeForce => Path.Combine(Root, "bridge-force-on.txt");
+        // TP latches the gun position while the lightgun's button is down, so a
+        // held trigger freezes the aim. This switch pulses the trigger instead:
+        // the game still sees presses, and the released frames let TP refresh
+        // the aim. Create the file to enable.
+        public static string BridgePulseTrigger => Path.Combine(Root, "bridge-pulse-trigger.txt");
         public static string Calibrations => Path.Combine(Root, "calibrations");
         public static string Logs => Path.Combine(Root, "logs");
     }
