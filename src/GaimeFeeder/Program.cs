@@ -359,8 +359,14 @@ namespace GaimeFeeder
             }
 
             bool down = g.TriggerDown || testTrig;
-            var (sx, sy, inside) = g.Calib.Map(down && !testTrig ? g.LatchedX : g.RawX,
-                                               down && !testTrig ? g.LatchedY : g.RawY);
+            // Use the latched pre-press aim for the press frame only (so the
+            // trigger jolt cannot drag the shot), then the live position while
+            // the trigger stays down. Holding the latch for the whole hold
+            // froze the aim: on the bridge that is "cannot shoot and move".
+            bool pressFrame = g.PressFramePending && !testTrig;
+            if (g.PressFramePending) g.PressFramePending = false;
+            var (sx, sy, inside) = g.Calib.Map(pressFrame ? g.LatchedX : g.RawX,
+                                               pressFrame ? g.LatchedY : g.RawY);
             if (testStick)
             {
                 sx = (g.Calib.ScreenW - 1) / 2 + g.TestStickX * (g.Calib.ScreenW - 1) / 2;

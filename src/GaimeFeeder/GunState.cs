@@ -74,6 +74,10 @@ namespace GaimeFeeder
         long _tipOffT0;
         public bool TriggerDown;
         public DateTime TriggerEdge;
+        // Set on the press edge and cleared by the first Feed(): the latched
+        // pre-press aim is for the shot itself, not for the whole hold. A held
+        // trigger has to keep tracking or full-auto cannot be aimed.
+        public bool PressFramePending;
         // Report-rate tracking: drives the valid-lock gate below and the tray's
         // Hz readout.
         long _lastTick;
@@ -217,6 +221,7 @@ namespace GaimeFeeder
                     int back = Math.Min(LatchN - 1, 26); // ~100 ms at 265 Hz
                     int idx = ((_li - 1 - back) % LatchN + LatchN) % LatchN;
                     LatchedX = _lx[idx]; LatchedY = _ly[idx];
+                    PressFramePending = true;
                 }
                 return;
             }
