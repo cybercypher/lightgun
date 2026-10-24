@@ -133,14 +133,8 @@ namespace GaimeFeeder
             return v2;
         }
 
-        // Test pulse (console keys): synthesize a trigger hold for binding capture.
+        // Test pulse (tray Pulse button): synthesize a trigger hold.
         public DateTime TestTriggerUntil = DateTime.MinValue;
-        // Test stick pulse: -1..1 deflection until time (999 = inactive).
-        public DateTime TestStickUntil = DateTime.MinValue;
-        public float TestStickX, TestStickY;
-        // Test buttons bitmask until time: 1=A 2=B 4=Coin(Back) 8=Start.
-        public DateTime TestBtnUntil = DateTime.MinValue;
-        public int TestBtnMask;
 
         // Median-of-5 spike reject on the incoming stream. When the sensor loses
         // screen lock the raw output sweeps the whole 0..10000 space with
@@ -226,7 +220,7 @@ namespace GaimeFeeder
                 return;
             }
             if (!TriggerDown && _tipOnRun >= 1 && _tipOnRun < 3)
-                LastBlip = _tipOnRun; // swallowed tap: visible in console, not the output
+                LastBlip = _tipOnRun; // swallowed tap: never reaches the output
             _tipOnRun = 0;
             _tipOffRun++;
             if (_tipOffRun == 1) _tipOffT0 = System.Diagnostics.Stopwatch.GetTimestamp();

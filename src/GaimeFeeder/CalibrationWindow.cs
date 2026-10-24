@@ -47,7 +47,9 @@ namespace GaimeFeeder
             };
             _cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(_cancel);
-            MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) TriggerSample(); };
+            // No mouse-click sampling: a click carries no gun position (the
+            // sample source is the gun's pre-press latch), and with
+            // TouchGate=0 the gun no longer produces Windows touch clicks.
             Shown += (s, e) => { Rebuild(); LayoutChrome(); Activate(); };
         }
 
@@ -113,9 +115,8 @@ namespace GaimeFeeder
         }
 
         // Called by the feeder when this gun's debounced trigger fires.
-        // Time-gated: one physical pull produces TWO events (debounced tip edge
-        // + the Windows touch-click from the digitizer acting as a touchscreen),
-        // plus tip flutter re-edges. Accept at most one sample per 750 ms.
+        // Time-gated against tip flutter re-edges: accept at most one sample
+        // per 750 ms.
         DateTime _lastSample = DateTime.MinValue;
         public void TriggerSample()
         {
@@ -134,23 +135,56 @@ namespace GaimeFeeder
             else { UpdateLabel(); Invalidate(); }
         }
 
+        // Per axis, fit pixel = a * raw + b by least squares through all five
+        // targets (centre included), at their real pixel positions. Then
+        // extrapolate to the screen edges, so the stored RawMin/RawMax keep
+        // their meaning (raw at pixel 0 and at pixel W-1) and RectCalib.Map()
+        // and the cal_<sn>.json format stay the same.
         void Finish()
         {
-            int minX = int.MaxValue, maxX = int.MinValue, minY = int.MaxValue, maxY = int.MinValue;
-            foreach (var s in _samples)
+            int w = Screen.PrimaryScreen.Bounds.Width, h = Screen.PrimaryScreen.Bounds.Height;
+            int n = _samples.Count;
+            var rx = new double[n]; var ry = new double[n];
+            var px = new double[n]; var py = new double[n];
+            for (int i = 0; i < n; i++)
             {
-                minX = Math.Min(minX, s.x); maxX = Math.Max(maxX, s.x);
-                minY = Math.Min(minY, s.y); maxY = Math.Max(maxY, s.y);
+                rx[i] = _samples[i].x; ry[i] = _samples[i].y;
+                px[i] = _targets[i].X; py[i] = _targets[i].Y;
             }
-            Result = new RectCalib
-            {
-                RawMinX = minX, RawMaxX = maxX, RawMinY = minY, RawMaxY = maxY,
-                ScreenW = Screen.PrimaryScreen.Bounds.Width,
-                ScreenH = Screen.PrimaryScreen.Bounds.Height,
-                InvertY = false
-            };
+            var (ax, bx) = Fit(rx, px);
+            var (ay, by) = Fit(ry, py);
+            // Raw grows to the right and down on these guns (InvertY = false).
+            // A slope that is not finite and positive means bad samples: return
+            // an empty result, which IsValid rejects ("bad samples, skipped").
+            if (!(double.IsFinite(ax) && ax > 0 && double.IsFinite(ay) && ay > 0))
+                Result = new RectCalib { ScreenW = w, ScreenH = h };
+            else
+                Result = new RectCalib
+                {
+                    RawMinX = (0 - bx) / ax, RawMaxX = (w - 1 - bx) / ax,
+                    RawMinY = (0 - by) / ay, RawMaxY = (h - 1 - by) / ay,
+                    ScreenW = w, ScreenH = h,
+                    InvertY = false
+                };
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        // Least-squares line px = a * raw + b.
+        static (double a, double b) Fit(double[] raw, double[] px)
+        {
+            int n = raw.Length;
+            double mr = 0, mp = 0;
+            for (int i = 0; i < n; i++) { mr += raw[i]; mp += px[i]; }
+            mr /= n; mp /= n;
+            double sxy = 0, sxx = 0;
+            for (int i = 0; i < n; i++)
+            {
+                sxy += (raw[i] - mr) * (px[i] - mp);
+                sxx += (raw[i] - mr) * (raw[i] - mr);
+            }
+            double a = sxy / sxx;
+            return (a, mp - a * mr);
         }
 
         protected override void OnPaint(PaintEventArgs e)

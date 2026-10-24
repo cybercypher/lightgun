@@ -3,7 +3,7 @@ using System.IO;
 
 namespace GaimeFeeder
 {
-    // Data root shared by both apps (linked compile).
+    // Data root for GaimeTray (this file is linked into it).
     //
     // Deployed (C:\games\feeder\): guns.json + calibrations\ + logs\ sit next to
     // the exe, so the install is self-contained and survives a WSL wipe.

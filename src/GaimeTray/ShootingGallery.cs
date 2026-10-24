@@ -9,10 +9,10 @@ namespace GaimeTray
 {
     // Fullscreen shooting gallery for checking calibration.
     //
-    // Every shot is drawn where RectCalib.Map() puts the live filtered position.
-    // The Pico bridge gets the same mapping (FeedCore), except that its press
-    // frame uses the pre-press latched position. The bridge does not stream
-    // while this window is in front (it is not a game process) unless
+    // Every shot is drawn where RectCalib.Map() puts the pre-press latched
+    // position - the same point the Pico bridge's press frame sends (FeedCore).
+    // The crosshair and HUD use the live filtered position. The bridge does not
+    // stream while this window is in front (it is not a game process) unless
     // bridge-force-on.txt exists.
     //
     // One target at a time: aim at the ring and pull the trigger. A hit scores
@@ -339,12 +339,21 @@ namespace GaimeTray
             v.Shots++;
             if (v.HasFix)
             {
-                shot.X = (float)v.Sx;
-                shot.Y = (float)v.Sy;
+                // Same point as the Pico's press frame: the pre-press latch,
+                // not the jolted position at the trigger edge.
+                var (lx, ly, _) = cal.Map(g.LatchedX, g.LatchedY);
+                shot.X = (float)lx;
+                shot.Y = (float)ly;
                 if (_target != null)
                 {
                     double d = Dist(shot.X, shot.Y, _target.X, _target.Y);
                     v.LastErr = d;
+                    // One line per scored shot, so calibration error can be
+                    // compared from the log (centre vs edges, before vs after).
+                    Log?.Invoke("gallery [shot]: " + v.Label + " miss " + d.ToString("F0") +
+                        " px " + (d <= _target.R ? "HIT" : "miss") +
+                        " target (" + _target.X.ToString("F0") + "," + _target.Y.ToString("F0") +
+                        ") shot (" + shot.X.ToString("F0") + "," + shot.Y.ToString("F0") + ")");
                     if (d <= _target.R)
                     {
                         shot.Hit = true;

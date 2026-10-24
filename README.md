@@ -42,7 +42,7 @@ Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PRO
 ## Layout
 
 - `tools/gun_probe_win.py` — enumerate (serial/path/ContainerId) + log digitizer & keyboard reports.
-- `src/GaimeFeeder/` — console feeder + shared engine; `src/GaimeTray/` — tray app (daily driver).
+- `src/GaimeTray/` — tray app (the only app); `src/GaimeFeeder/` — engine files linked into it (no project).
 - `pico/gun_bridge/` — Pico bridge firmware, `PROTOCOL.md`, DemulShooter helper scripts.
 - `docs/gaime_protocol.md` — wire format + reference-repo notes.
 - `calibrations/` — per-serial calibration files (gitignored).
@@ -55,9 +55,8 @@ Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PRO
    press A/B/Coin/Start. Send the log + observed button map.
 4. Then: calibration tool + feeder (per-gun player number, like guncon2 `-index N`).
 
-## Feeder (`src/GaimeFeeder`, C# net8.0-windows, builds clean)
+## Tray app (`src/GaimeTray`, C# net8.0-windows)
 
-- `GaimeFeeder --list` — shows the gun sns + HID routing, exits.
 - Per gun → Pico bridge mouse P1/P2: absolute calibrated aim; **trigger → left
   button** (debounced; the press frame uses the pre-press latched aim), B → right,
   A → middle, Coin → back, Start → forward (`docs/buttons.md`).
@@ -102,21 +101,21 @@ WSL repo), next to the other emulator folders. It is self-contained:
 
 ```
 C:\games\feeder\
-  GaimeTray.exe / GaimeFeeder.exe (+ .dll, deps, runtimeconfig)
+  GaimeTray.exe (+ .dll, deps, runtimeconfig)
   guns.json
   calibrations\cal_<sn>.json
-  logs\  (tray-<date>.log, bridge-<date>.log, feeder.log, capture-*.txt)
-  Launch-Tray.cmd   Launch-Feeder.cmd   Feeder.ps1
+  logs\  (tray-<date>.log, bridge-<date>.log, capture-*.txt)
+  Launch-Tray.cmd
 ```
 
 - Daily driver: `C:\games\feeder\Launch-Tray.cmd` (or the repo's
   `tools\Launch-Tray.cmd`, which starts the deployed copy).
-- The apps resolve their data root by walking up from the exe to the folder
+- The app resolves its data root by walking up from the exe to the folder
   holding `guns.json` (`AppPaths.cs`) — so the deployed folder is the root,
   and a dev build under `src\<App>\bin\...\net8.0-windows\` still resolves to
   the repo root.
 - Rebuild + redeploy after source changes: run `tools\Deploy-Feeder.ps1`
-  (`dotnet publish -c Release` of both projects into `C:\games\feeder`).
+  (`dotnet publish -c Release` of `GaimeTray` into `C:\games\feeder`).
 - Requires the .NET 8 Windows desktop runtime and the Pico bridge
   (`pico/gun_bridge`, flashed and plugged in).
 - Recommended one-time setting (no admin) so Windows does not move the cursor

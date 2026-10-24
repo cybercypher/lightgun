@@ -8,14 +8,12 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>GaimeTray</AssemblyName>
     <RootNamespace>GaimeTray</RootNamespace>
-    <!-- 0649: GunState test-pulse fields are assigned by the feeder, not the tray -->
-    <NoWarn>$(NoWarn);0649</NoWarn>
   </PropertyGroup>
 
 
   <ItemGroup>
-    <!-- Reuse the proven feeder engine unchanged. Program.cs is NOT linked:
-         orchestration lives in FeederEngine.cs (instance-based, UI events). -->
+    <!-- Engine files live in ..\GaimeFeeder (no project there; the console
+         app was removed). Orchestration lives in FeederEngine.cs. -->
     <Compile Include="..\GaimeFeeder\AppPaths.cs" Link="Engine\AppPaths.cs" />
     <Compile Include="..\GaimeFeeder\GunState.cs" Link="Engine\GunState.cs" />
     <Compile Include="..\GaimeFeeder\GunMap.cs" Link="Engine\GunMap.cs" />

@@ -123,8 +123,7 @@ namespace GaimeFeeder
         // DS's changelog confirms right-click reload for mouse controllers, and
         // its middle button is the action/pedal input.
         public static void Feed(int player, double sx, double sy,
-            int screenW, int screenH, bool inside, GunState g, bool trigger,
-            int testMask = 0)
+            int screenW, int screenH, bool inside, GunState g, bool trigger)
         {
             if (!ShouldStream())
             {
@@ -158,16 +157,11 @@ namespace GaimeFeeder
                 fire = phase < (_pulsePeriodMs / 2);
                 _pulseTick++;
             }
-            // Console test pulses (keys 1-4): 1 = A, 2 = B, 4 = Coin, 8 = Start.
-            bool btnA = g.BtnA || (testMask & 1) != 0;
-            bool btnB = g.BtnB || (testMask & 2) != 0;
-            bool btnCoin = g.BtnCoin || (testMask & 4) != 0;
-            bool btnStart = g.BtnStart || (testMask & 8) != 0;
             if (fire) buttons |= 0x01;                              // left
-            if ((trigger && !inside) || btnB) buttons |= 0x02;      // right
-            if (btnA) buttons |= 0x04;                              // middle
-            if (btnCoin) buttons |= 0x08;                           // back
-            if (btnStart) buttons |= 0x10;                          // forward
+            if ((trigger && !inside) || g.BtnB) buttons |= 0x02;    // right
+            if (g.BtnA) buttons |= 0x04;                            // middle
+            if (g.BtnCoin) buttons |= 0x08;                         // back
+            if (g.BtnStart) buttons |= 0x10;                        // forward
 
             Send(player, x, y, buttons);
         }

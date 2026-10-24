@@ -16,7 +16,7 @@ namespace GaimeTray
         public double AgeMs, RateHz;
     }
 
-    // Instance-based port of GaimeFeeder/Program.cs orchestration.
+    // Tray orchestration: guns, calibration, hot-plug, gallery, feed.
     // All mutations run on the UI thread (RawInput callbacks, Post()ed hotplug
     // attaches, UI button handlers). Poll/hotplug threads only read + Feed.
     // Logs go to the Logged event + logs/tray-<date>.log instead of Console.
@@ -207,8 +207,12 @@ namespace GaimeTray
             string sn = _pendingCal.Dequeue();
             if (!_guns.ContainsKey(sn)) { CalibrateNext(); return; }
             _calibSn = null;
-            _calib = new CalibrationWindow("Calibrating " + _guns[sn].Label,
-                () => _latest[sn]);
+            // Sample the pre-press latched aim (filtered, ~100 ms before the
+            // debounced edge), not the raw report at the edge: the trigger
+            // jolt moves the raw aim by 144-810 counts.
+            var cg = _guns[sn];
+            _calib = new CalibrationWindow("Calibrating " + cg.Label,
+                () => (cg.LatchedX, cg.LatchedY));
             _calib.FormClosed += (s, e) =>
             {
                 string target = _calibSn ?? sn;
@@ -294,19 +298,21 @@ namespace GaimeTray
                 g.PushPointer(x, y, tip, true);
                 bool pressed = g.TriggerDown && !was;
                 _gallery?.OnPointer(g, pressed);
-                if (g.Calib == null) return;
-                if (g.TriggerDown != was)
-                    Emit(g.Label + ": trigger " + (g.TriggerDown ? "DOWN" : "UP") +
-                        " raw=(" + x + "," + y + ") tip=" + tip);
+                // Calibration runs before the uncalibrated return: a gun with no
+                // cal file must be able to calibrate with its own trigger.
                 if (pressed && _calib != null)
                 {
                     if (_calibSn == null)
                     {
                         _calibSn = sn;
-                        _calib.LockTo(sn, _guns[sn].Label, () => _latest[sn]);
+                        _calib.LockTo(sn, g.Label, () => (g.LatchedX, g.LatchedY));
                     }
                     if (sn == _calibSn) _calib.TriggerSample();
                 }
+                if (g.Calib == null) return;
+                if (g.TriggerDown != was)
+                    Emit(g.Label + ": trigger " + (g.TriggerDown ? "DOWN" : "UP") +
+                        " raw=(" + x + "," + y + ") tip=" + tip);
                 Feed(g);
             }
             catch (Exception ex) { Emit("OnPointer ERROR: " + ex.Message); }
