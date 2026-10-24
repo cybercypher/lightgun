@@ -12,3 +12,7 @@ src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
 src/GaimeTray/bin/
 src/GaimeTray/obj/
+# local venv for the screenshot/reticle analysis helpers
+.venv/
+logs/shots/
+logs/bridge/

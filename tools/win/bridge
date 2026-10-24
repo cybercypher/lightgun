@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Send one command to the persistent Pico bridge server (tools/win/BridgeServer.ps1)
+# and wait for it to be executed.
+#
+#   tools/win/bridge move 1920 1080      # screen pixels (primary screen)
+#   tools/win/bridge raw 16383 16383     # 0..32767 device units
+#   tools/win/bridge click 1920 1080 [ms]   # x y ms
+#   tools/win/bridge press forward [ms]
+#   tools/win/bridge tap [ms]            # left click in place
+#   tools/win/bridge down left
+#   tools/win/bridge up
+#   tools/win/bridge path "100,100;200,200;300,300" [intervalMs]
+#   tools/win/bridge status
+#   tools/win/bridge -n ...              # fire and forget (no wait)
+#
+# Exit 2 if the server did not acknowledge within the timeout.
+
+set -u
+DIR=${GAIME_BRIDGE_DIR:-/home/USER/lightgun/logs/bridge}
+CMDS="$DIR/cmds.txt"
+STATUS="$DIR/status.txt"
+WAIT=${GAIME_BRIDGE_WAIT:-3}
+
+ack=1
+if [ "${1:-}" = "-n" ]; then ack=0; shift; fi
+
+if [ "${1:-}" = "status" ]; then
+    cat "$STATUS" 2>/dev/null || echo '{"open":false}'
+    exit 0
+fi
+
+if [ ! -f "$CMDS" ]; then
+    echo "bridge: command file missing ($CMDS); is BridgeServer.ps1 running?" >&2
+    exit 3
+fi
+
+seq="$(date +%s%N)"
+printf '%s %s\n' "$seq" "$*" >> "$CMDS"
+
+if [ "$ack" = "0" ]; then exit 0; fi
+
+deadline=$(( $(date +%s%N) + WAIT * 1000000000 ))
+while [ "$(date +%s%N)" -lt "$deadline" ]; do
+    line=$(cat "$STATUS" 2>/dev/null)
+    case "$line" in
+        *"\"seq\":\"$seq\""*)
+            case "$line" in
+                *'"result":"ok"'*) printf '%s\n' "$line"; exit 0 ;;
+                *) printf '%s\n' "$line" >&2; exit 1 ;;
+            esac
+            ;;
+    esac
+    sleep 0.01
+done
+echo "bridge: timeout waiting for seq $seq (cmd: $*)" >&2
+exit 2

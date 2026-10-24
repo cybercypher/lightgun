@@ -154,7 +154,7 @@ namespace GaimeFeeder
                 frame[1] = 0x5A;
                 frame[2] = 0x01;
                 frame[3] = (byte)player;
-                frame[4] = (byte)(buttons & 0x07);
+                frame[4] = (byte)(buttons & 0x1F);   // five buttons: L R M back forward
                 frame[6] = (byte)(x & 0xFF);
                 frame[7] = (byte)((x >> 8) & 0xFF);
                 frame[8] = (byte)(y & 0xFF);
