@@ -14,9 +14,6 @@ namespace GaimeFeeder
     // takes the already-calibrated screen position, scales it to 0..32767 and
     // writes 12-byte frames over the CDC port. It is silent unless the feeder
     // calls Feed(), so an idle bridge never touches the desktop cursor.
-    //
-    // Exactly one output is active at a time (see OutputConfig); with pico
-    // selected, no ViGEm pads are created at all.
     static class PicoOutput
     {
         const string DeviceKey =
@@ -92,8 +89,6 @@ namespace GaimeFeeder
         static DateTime _nextGate = DateTime.MinValue;
         static readonly object LogLock = new object();
 
-        public static bool Enabled => OutputConfig.UsePico;
-
         public static string Status
         {
             get { lock (Gate) return StatusLocked(); }
@@ -128,10 +123,9 @@ namespace GaimeFeeder
         // DS's changelog confirms right-click reload for mouse controllers, and
         // its middle button is the action/pedal input.
         public static void Feed(int player, double sx, double sy,
-            int screenW, int screenH, bool inside, GunState g, bool trigger)
+            int screenW, int screenH, bool inside, GunState g, bool trigger,
+            int testMask = 0)
         {
-            if (!Enabled) return;
-
             if (!ShouldStream())
             {
                 if (_wasStreaming)
@@ -156,18 +150,24 @@ namespace GaimeFeeder
             bool fire = trigger && inside;
             if (fire && _pulsePeriodMs > 0)
             {
-                // TP's gun board latches the position while the button is down
-                // (a held trigger freezes the aim). Fire in a square wave: the
-                // released half gives TP frames it will use to refresh the aim.
+                // Debug switch only (bridge-pulse-trigger.txt). It was added for a
+                // held-trigger aim freeze that was a feeder bug, not TP: the tray sent
+                // the latched pre-press aim for the whole hold (fixed in FeedCore).
+                // Keep it off.
                 long phase = Environment.TickCount64 % _pulsePeriodMs;
                 fire = phase < (_pulsePeriodMs / 2);
                 _pulseTick++;
             }
+            // Console test pulses (keys 1-4): 1 = A, 2 = B, 4 = Coin, 8 = Start.
+            bool btnA = g.BtnA || (testMask & 1) != 0;
+            bool btnB = g.BtnB || (testMask & 2) != 0;
+            bool btnCoin = g.BtnCoin || (testMask & 4) != 0;
+            bool btnStart = g.BtnStart || (testMask & 8) != 0;
             if (fire) buttons |= 0x01;                              // left
-            if ((trigger && !inside) || g.BtnB) buttons |= 0x02;    // right
-            if (g.BtnA) buttons |= 0x04;                            // middle
-            if (g.BtnCoin) buttons |= 0x08;                         // back
-            if (g.BtnStart) buttons |= 0x10;                        // forward
+            if ((trigger && !inside) || btnB) buttons |= 0x02;      // right
+            if (btnA) buttons |= 0x04;                              // middle
+            if (btnCoin) buttons |= 0x08;                           // back
+            if (btnStart) buttons |= 0x10;                          // forward
 
             Send(player, x, y, buttons);
         }

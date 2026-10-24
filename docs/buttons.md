@@ -14,25 +14,20 @@ Sequence performed: `Trigger, A, Trigger, B, Trigger, Coin, Trigger, Start, Trig
 
 Matches MP1st report. (Later MOUSE traffic is the desk Logitech mouse, unrelated.)
 
-## Feeder → ViGEm Xbox360 pad (DemulShooter / Teknoparrot), per gun
+## Feeder → Pico bridge mouse, per player
 
-Trigger = X (button 3) only — the RB button and the right-trigger slider were
-removed so the trigger is a single clean, easy-to-map button. Standard Xbox /
-DirectInput button order (verified against the old RB mapping):
+Gun 1 = Bridge Mouse 1 (P1), Gun 2 = Bridge Mouse 2 (P2). Aim is absolute
+X/Y, 0..32767 over the primary screen.
 
-| # | XInput button | Gun function |
-|---|---|---|
-| 1 | A | Gun A (SPACE) |
-| 2 | B | Gun B (B) |
-| 3 | X | TRIGGER |
-| 4 | Y | — |
-| 5 | LB | — |
-| 6 | RB | — |
-| 7 | Back | Coin (C) |
-| 8 | Start | Start (Q) |
-| 9 | L3 | — |
-| 10 | R3 | — |
+| Gun input | Bridge mouse button | TeknoParrot `RawMouseButton` | Typical use |
+|---|---|---|---|
+| Trigger, aimed on screen | Left | `LeftButton` | fire |
+| Trigger, aimed off screen | Right | `RightButton` | reload (DemulShooter) |
+| B | Right | `RightButton` | reload |
+| A | Middle | `MiddleButton` | pedal / action / grenade |
+| Coin | Back (button 4) | `Button4` | coin |
+| Start | Forward (button 5) | `Button5` | start |
 
-Aim: left stick. X Axis = HID usage 0x30, Y Axis = 0x31 — the correct usages
-for the feeder's left stick, leave them. Recoil switch: host-silent (gun-local).
+Terminator Salvation's gun board does not see Coin/Start on Button4/5
+(`docs/terminator-salvation-input.md`). Recoil switch: host-silent (gun-local).
 Pedal: not detected by PC (console-only).

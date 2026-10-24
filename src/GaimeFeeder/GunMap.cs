@@ -8,7 +8,7 @@ namespace GaimeFeeder
 {
     // Stable Gun 1 / Gun 2 naming, keyed by USB serial. Gun 1 = <usb-serial>
     // (plugged in first, physically labeled). Persists in guns.json so a
-    // gun is always the same number -> same ViGEm pad (J1/J2).
+    // gun is always the same number -> same player (P1/P2) on the Pico bridge.
     static class GunMap
     {
         // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.

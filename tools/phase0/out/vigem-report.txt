@@ -1,8 +1,0 @@
-﻿# ViGEm probe 2026-10-23T12:08:11.7732392-07:00 pads=2 cycles=2
-cycle 1 : 2 pad(s)
-   \\?\hid#vid_045e&pid_028e&ig_01#3&966d8b0&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} | VID=0x045E PID=0x028E | UP=0x01 U=0x05 inLen=15 btnCaps=1 valCaps=6
-   \\?\hid#vid_045e&pid_028e&ig_04#3&f54e826&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} | VID=0x045E PID=0x028E | UP=0x01 U=0x05 inLen=15 btnCaps=1 valCaps=6
-cycle 2 : 2 pad(s)
-   \\?\hid#vid_045e&pid_028e&ig_01#3&966d8b0&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} | VID=0x045E PID=0x028E | UP=0x01 U=0x05 inLen=15 btnCaps=1 valCaps=6
-   \\?\hid#vid_045e&pid_028e&ig_04#3&f54e826&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030} | VID=0x045E PID=0x028E | UP=0x01 U=0x05 inLen=15 btnCaps=1 valCaps=6
-report=\\wsl.localhost\Ubuntu-24.04\home\USER\lightgun\tools\phase0\out\vigem-report.txt

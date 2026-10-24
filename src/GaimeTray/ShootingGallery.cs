@@ -9,9 +9,11 @@ namespace GaimeTray
 {
     // Fullscreen shooting gallery for checking calibration.
     //
-    // Every shot is drawn where RectCalib.Map() puts it - the same numbers the
-    // virtual pad receives - so a mis-aimed shot here is a mis-aimed shot in the
-    // game. Nothing is fed to ViGEm from this window; the pad keeps running.
+    // Every shot is drawn where RectCalib.Map() puts the live filtered position.
+    // The Pico bridge gets the same mapping (FeedCore), except that its press
+    // frame uses the pre-press latched position. The bridge does not stream
+    // while this window is in front (it is not a game process) unless
+    // bridge-force-on.txt exists.
     //
     // One target at a time: aim at the ring and pull the trigger. A hit scores
     // and a new target appears. The HUD shows raw, mapped, inside/lock state and

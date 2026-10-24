@@ -35,7 +35,6 @@ namespace GaimeTray
         const int HotplugRescanMs = 10000;
 
         readonly Dictionary<string, GunState> _guns = new Dictionary<string, GunState>();
-        readonly Dictionary<string, VigemPad> _pads = new Dictionary<string, VigemPad>();
         readonly Dictionary<string, (int x, int y)> _latest = new Dictionary<string, (int x, int y)>();
         readonly Queue<string> _pendingCal = new Queue<string>();
         CalibrationWindow _calib;
@@ -80,14 +79,11 @@ namespace GaimeTray
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
             _raw = new RawInputWindow(OnPointer, OnKey);
             RawInputWindow.Log = s => Emit("raw: " + s);
-            _raw.FormClosed += (s, e) => DisposePads();
             _raw.Show(); // invisible (Opacity 0): exists only for INPUTSINK
             Feeding = true;
-            Emit(OutputConfig.UsePico
-                ? "Output: Pico bridge (" + PicoOutput.Probe() + ")"
-                : "Output: ViGEm pads");
+            Emit("Output: Pico bridge (" + PicoOutput.Probe() + ")");
             Emit(sns.Count == 0
-                ? "No guns: binding mode (plug a gun any time, attaches in ~10 s)."
+                ? "No guns yet: plug one in, it attaches within ~10 s."
                 : "Feeding: " + string.Join(", ", sns));
             GunsChanged?.Invoke();
             EnsureThreads();
@@ -110,7 +106,6 @@ namespace GaimeTray
             catch { }
             try { _raw?.Close(); } catch { }
             _raw = null;
-            DisposePads();
             Emit("Stopped.");
             GunsChanged?.Invoke();
         }
@@ -201,19 +196,6 @@ namespace GaimeTray
             var numbering = GunMap.Load(allKnown);
             foreach (var s in sns) AddGun(s, numbering, silent: false);
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
-            // Deterministic slots (Change 2): if a newcomer outranks an existing
-            // pad's gun (lower PadIndex), ViGEmBus order would put it in the
-            // wrong slot; rebuild all pads so EnsurePads recreates them in
-            // pad-index order. Otherwise the newcomer takes the next free slot.
-            bool needRebuild;
-            lock (_guns) lock (_pads)
-                needRebuild = sns.Any(s => _guns.TryGetValue(s, out var ng) &&
-                    _pads.Keys.Any(ps => _guns.TryGetValue(ps, out var eg) && eg.PadIndex > ng.PadIndex));
-            if (needRebuild)
-            {
-                Emit("Hot-plug: rebuilding pads in pad-index order.");
-                DisposePads();
-            }
             GunsChanged?.Invoke();
             CalibrateNext();
         }
@@ -221,7 +203,7 @@ namespace GaimeTray
         void CalibrateNext()
         {
             if (!Feeding) return;
-            if (_calib != null || _pendingCal.Count == 0) { EnsurePads(); return; }
+            if (_calib != null || _pendingCal.Count == 0) return;
             string sn = _pendingCal.Dequeue();
             if (!_guns.ContainsKey(sn)) { CalibrateNext(); return; }
             _calibSn = null;
@@ -246,38 +228,6 @@ namespace GaimeTray
                 CalibrateNext();
             };
             _calib.Show();
-        }
-
-        void EnsurePads()
-        {
-            if (!Feeding) return;
-            if (OutputConfig.UsePico) return;   // bridge output: no ViGEm pads
-            lock (_guns) lock (_pads)
-            {
-                // Deterministic slots (Change 2): ViGEmBus hands out XInput slots
-                // in connection order, so create pads in pad-index order.
-                foreach (var g in _guns.Values.OrderBy(g => g.PadIndex))
-                    if (g.Calib != null && !_pads.ContainsKey(g.Serial))
-                    {
-                        try { _pads[g.Serial] = new VigemPad(g.PadIndex); }
-                        catch (Exception ex)
-                        {
-                            Emit("Pad " + g.PadIndex + " FAILED: " + ex.Message +
-                                " — is ViGEmBus installed?");
-                        }
-                    }
-            }
-            GunsChanged?.Invoke();
-        }
-
-        void DisposePads()
-        {
-            lock (_pads)
-            {
-                foreach (var p in _pads.Values)
-                    try { p.Dispose(); } catch { }
-                _pads.Clear();
-            }
         }
 
         void EnsureThreads()
@@ -375,53 +325,13 @@ namespace GaimeTray
                     case 0x51: g.BtnStart = down; break;
                     default: return;
                 }
-                bool hadCal = g.Calib != null;
                 _gallery?.OnGunKey(g, vkey, down);
-                // A gun calibrated for the first time inside the gallery had no
-                // pad (EnsurePads skips uncalibrated guns). Create it now so the
-                // very next report feeds the stick.
-                if (!hadCal && g.Calib != null) EnsurePads();
                 Feed(g);
             }
             catch (Exception ex) { Emit("OnKey ERROR: " + ex.Message); }
         }
 
-        void Feed(GunState g)
-        {
-            bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
-            // Latch only for the press frame (so the trigger jolt cannot drag
-            // the shot), then track live while the trigger stays down. Holding
-            // the latch for the whole hold froze the aim: on the bridge that is
-            // "cannot shoot and move". Same rule as GaimeFeeder/Program.cs.
-            // Consume the flag even without a calibration, or it can go stale
-            // across one and fire one old-position click.
-            bool pressFrame = g.PressFramePending && !testTrig;
-            if (g.PressFramePending) g.PressFramePending = false;
-            if (g.Calib == null) return;
-            bool down = g.TriggerDown || testTrig;
-            var (sx, sy, inside) = g.Calib.Map(
-                pressFrame ? g.LatchedX : g.RawX,
-                pressFrame ? g.LatchedY : g.RawY);
-
-            if (OutputConfig.UsePico)
-            {
-                // Absolute mouse: no ValidLock gate, and an offscreen pull is
-                // sent as the right button (DemulShooter's reload for mice).
-                PicoOutput.Feed(g.PadIndex - 1, sx, sy,
-                                g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
-                return;
-            }
-
-            lock (_pads)
-            {
-                if (!_pads.TryGetValue(g.Serial, out var p)) return;
-                // Change 3: aim only on a valid on-screen lock (fast stream +
-                // inside calibration bounds); otherwise write nothing and let
-                // the pad hold its last position.
-                p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH,
-                       inside && g.ValidLock, g, down);
-            }
-        }
+        void Feed(GunState g) => FeedCore.Feed(g);
 
         // Deployed: beside the exe (C:\games\feeder). Dev: repo root. See AppPaths.
         static string LogDir() => AppPaths.Logs;

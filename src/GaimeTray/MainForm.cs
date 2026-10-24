@@ -20,7 +20,6 @@ namespace GaimeTray
         readonly Button _testBtn;
         readonly CheckBox _autostart;
         readonly RichTextBox _log = new RichTextBox();
-        readonly Label[] _slots = new Label[4];
         readonly NumericUpDown _secs = new NumericUpDown();
         Button _capBtn;
         readonly Label _capResult = new Label();
@@ -116,7 +115,6 @@ namespace GaimeTray
             // tabs
             var tabs = new TabControl { Dock = DockStyle.Fill, BackColor = Bg };
             tabs.TabPages.Add(MkLogPage());
-            tabs.TabPages.Add(MkSlotsPage());
             tabs.TabPages.Add(MkCapPage());
             Controls.Add(tabs);
 
@@ -146,35 +144,6 @@ namespace GaimeTray
             };
             bar.Controls.AddRange(new Control[] { clear, folder });
             p.Controls.AddRange(new Control[] { _log, bar });
-            return p;
-        }
-
-        TabPage MkSlotsPage()
-        {
-            var p = new TabPage("XInput") { BackColor = Bg };
-            var hint = new Label
-            {
-                Text = "what Teknoparrot sees (was the XCheck window) — @10 Hz",
-                Dock = DockStyle.Top, Height = 26, ForeColor = Dim, BackColor = Bg,
-                TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0),
-            };
-            p.Controls.Add(hint);
-            var box = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill, BackColor = Bg, Padding = new Padding(12),
-                FlowDirection = FlowDirection.TopDown,
-            };
-            for (int i = 0; i < 4; i++)
-            {
-                _slots[i] = new Label
-                {
-                    AutoSize = false, Size = new Size(700, 30),
-                    Font = new Font("Consolas", 10), ForeColor = Fg, BackColor = Panel,
-                    TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(8, 0, 0, 0),
-                };
-                box.Controls.Add(_slots[i]);
-            }
-            p.Controls.Add(box);
             return p;
         }
 
@@ -260,12 +229,6 @@ namespace GaimeTray
             var snap = _eng.Snapshot();
             if (snap.Count > 0) _c1.Show(snap[0]);
             if (snap.Count > 1) _c2.Show(snap[1]);
-            for (uint i = 0; i < 4; i++)
-            {
-                bool present = SlotReader.TryDescribe(i, out var line);
-                _slots[i].Text = "   " + line;
-                _slots[i].ForeColor = present ? Lime : Dim;
-            }
         }
 
         void OnLog(string s)

@@ -5,7 +5,7 @@ Windows, fed by the PC over USB CDC. The G'AIM'E guns stay plugged into the PC;
 the host reads and calibrates them and sends already-mapped X/Y + buttons to
 the Pico.
 
-This replaces the ViGEm Xbox pad path for DemulShooter/TeknoParrot: absolute
+This is the feeder's only output (the ViGEm Xbox pad path was removed). Absolute
 mice are the device class DS and TP already understand, and a dedicated USB
 device with fixed descriptors gives stable RawInput paths across
 unplug/replug and reboots.

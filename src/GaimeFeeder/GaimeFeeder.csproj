@@ -9,9 +9,5 @@
     <AssemblyName>GaimeFeeder</AssemblyName>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Xbox360 pads J1/J2 for DemulShooter / Teknoparrot. Requires ViGEmBus installed. -->
-    <PackageReference Include="Nefarius.ViGEm.Client" Version="1.*" />
-  </ItemGroup>
 
 </Project>

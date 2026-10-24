@@ -12,6 +12,10 @@ foreach ($p in "GaimeTray", "GaimeFeeder") {
     & $dotnet publish "$repo\src\$p\$p.csproj" -c Release -o $dest
     if ($LASTEXITCODE -ne 0) { throw "publish failed for $p" }
 }
+# ViGEm output was removed; delete its leftovers from older deploys.
+foreach ($f in "Nefarius.ViGEm.Client.dll", "XCheck.ps1", "output.txt") {
+    Remove-Item -LiteralPath (Join-Path $dest $f) -ErrorAction SilentlyContinue
+}
 Copy-Item "$repo\guns.json" $dest -Force
 Copy-Item "$repo\calibrations\*.json" "$dest\calibrations\" -Force
 Write-Host "Deployed to $dest"

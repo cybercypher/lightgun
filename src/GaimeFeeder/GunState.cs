@@ -8,7 +8,7 @@ namespace GaimeFeeder
     sealed class GunState
     {
         public readonly string Serial;
-        public readonly int PadIndex; // 1-based ViGEm pad (J1/J2)
+        public readonly int PadIndex; // 1-based player number (P1/P2) = Pico bridge mouse 1/2
         public readonly string Label; // "Gun 1 (<usb-serial>)"
         public RectCalib Calib;
 
@@ -83,13 +83,13 @@ namespace GaimeFeeder
         long _lastTick;
         public double LastIntervalMs = 1000;
 
-        // Valid-lock gate (Change 3): a real on-screen lock streams ~265 Hz
-        // (interval ~3.8 ms); an idle gun wanders the whole span at <60 Hz
-        // (measured ~28 Hz). Only a fast, fresh stream may move the virtual
-        // stick, so idle wander can't creep the aim. HYPOTHESIS: the ~265 Hz
-        // vs <60 Hz split is the measured hardware behaviour. The rate is
-        // averaged over a short window so one slow sample during a real aim
-        // sweep can't freeze the stick.
+        // Valid-lock test: a real on-screen lock streams ~265 Hz (interval
+        // ~3.8 ms); an idle gun wanders the whole span at <60 Hz (measured
+        // ~28 Hz). Used by the cursor guard (RawInputWindow.NoteGunLock) and
+        // the gallery HUD (LOCK). The Pico path does not gate aim on it.
+        // HYPOTHESIS: the ~265 Hz vs <60 Hz split is the measured hardware
+        // behaviour. The rate is averaged over a short window so one slow
+        // sample during a real aim sweep does not drop the lock.
         const int LockWin = 8;
         const double LockMinHz = 200.0;
         readonly double[] _ivWin = new double[LockWin];
@@ -226,7 +226,7 @@ namespace GaimeFeeder
                 return;
             }
             if (!TriggerDown && _tipOnRun >= 1 && _tipOnRun < 3)
-                LastBlip = _tipOnRun; // swallowed tap: visible in console, not the pad
+                LastBlip = _tipOnRun; // swallowed tap: visible in console, not the output
             _tipOnRun = 0;
             _tipOffRun++;
             if (_tipOffRun == 1) _tipOffT0 = System.Diagnostics.Stopwatch.GetTimestamp();

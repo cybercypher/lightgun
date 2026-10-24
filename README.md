@@ -1,10 +1,9 @@
-# G'AIM'E Lightgun → ViGEm (GunCon-style) for Teknoparrot / DemulShooter
+# G'AIM'E Lightgun → Pico bridge (absolute mice) for TeknoParrot / DemulShooter
 
-Goal: make each G'AIM'E gun appear as its **own Xbox360 pad** (ViGEmBus) so 2 guns work
-simultaneously in Teknoparrot / DemulShooter, with calibration. Pattern follows
-`psakhis/guncon2` (per-gun process, `index` → vJoy id) and `gameotaku79/Guncon3Windows`
-(5-point cal, `mapping.txt`-style buttons), but with maintained **ViGEmBus** instead of
-archived TetherScript / vJoy.
+Goal: make each G'AIM'E gun appear as its **own absolute mouse** on a Pico bridge
+(Bridge Mouse 1 / Bridge Mouse 2) so 2 guns work simultaneously in TeknoParrot /
+DemulShooter, with calibration. Pattern follows `psakhis/guncon2` (per-gun `index`)
+and `gameotaku79/Guncon3Windows` (5-point cal, `mapping.txt`-style buttons).
 
 ## Hardware (confirmed on this machine)
 
@@ -24,14 +23,18 @@ See `docs/gaime_protocol.md`.
 ## Architecture
 
 ```
-Gun 1 (serial <usb-serial>) ──hidapi path──┐
-                                     ├─► per-gun process ─► calibration (bbox + homography)
-Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad 1 (J1): left-stick = aim, X = trigger
-                                           └─► ViGEm Xbox360 Pad 2 (J2): same
+Gun 1 (sn 11111) ──┐ front USB
+                   ├─► GaimeTray: RawInput + calibration + filters + FeedCore
+Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PROTOCOL.md)
+                              ▼
+                     Pico bridge (back USB)
+                      ├─► Bridge Mouse 1 (P1): absolute aim + 5 buttons
+                      └─► Bridge Mouse 2 (P2): same
 ```
 
 - Separation key: **USB serial + hidapi path + ContainerId**, *not* X/Y (both guns emit 0..10000).
-- One OS cursor exists — never feed the system mouse. Feed only ViGEm pads.
+- The Pico's absolute mice move the OS cursor only while a listed game is in the
+  foreground (`bridge-processes.txt`); on the desktop the bridge is silent.
 - Calibration: 4 corners + center (like Guncon3Windows `RectCalib`), bbox min/max + `InvertY`,
   upgrade to homography if aiming at an angle. Persist per-serial `calibration_<serial>.json`.
 - Filters: median-of-5 spike reject + max-jump gate + trigger latch-and-hold (quantify jitter first).
@@ -39,28 +42,31 @@ Gun 2 (serial ?????) ──hidapi path──┘      ├─► ViGEm Xbox360 Pad
 ## Layout
 
 - `tools/gun_probe_win.py` — enumerate (serial/path/ContainerId) + log digitizer & keyboard reports.
-- `src/gaime/` — feeder (planned): `hid_reader.py`, `calibration.py`, `filters.py`, `vigem_pad.py`.
+- `src/GaimeFeeder/` — console feeder + shared engine; `src/GaimeTray/` — tray app (daily driver).
+- `pico/gun_bridge/` — Pico bridge firmware, `PROTOCOL.md`, DemulShooter helper scripts.
 - `docs/gaime_protocol.md` — wire format + reference-repo notes.
 - `calibrations/` — per-serial calibration files (gitignored).
 
 ## Next steps
 
-1. Install on **Windows** Python (not WSL): `pip install -r requirements.txt`, install **ViGEmBus**.
+1. Install on **Windows** Python (not WSL): `pip install -r requirements.txt`.
 2. `python tools/gun_probe_win.py list` — confirm serial(s). Plug in 2nd gun → two serials.
 3. `python tools/gun_probe_win.py log --seconds 15` — aim at lit display, move, pull trigger,
    press A/B/Coin/Start. Send the log + observed button map.
-4. Then: calibration tool + ViGEm feeder (per-gun `index` → pad id, like guncon2 `-index N`).
+4. Then: calibration tool + feeder (per-gun player number, like guncon2 `-index N`).
 
 ## Feeder (`src/GaimeFeeder`, C# net8.0-windows, builds clean)
 
 - `GaimeFeeder --list` — shows the gun sns + HID routing, exits.
-- Per gun → Xbox360 pad J1/J2: left stick = calibrated aim, **X = trigger**
-  (button 3; debounced, latched pre-press), A/B/Back/Start per `docs/buttons.md`.
+- Per gun → Pico bridge mouse P1/P2: absolute calibrated aim; **trigger → left
+  button** (debounced; the press frame uses the pre-press latched aim), B → right,
+  A → middle, Coin → back, Start → forward (`docs/buttons.md`).
 - Stable names in `guns.json`: Gun 1 = sn `11111`, Gun 2 = sn `22222`
   (on-device serials, stable across reboots/ports — see `docs/identity.md`).
-  Gun number = ViGEm pad number (J1/J2), forever, created in pad-index order.
-- Aim is forwarded only on a valid on-screen lock (~200+ Hz); idle wander is
-  dropped so the virtual stick holds. The gun's digitizer also produces
+  Gun number = Pico player (P1/P2), forever.
+- The bridge streams only while a listed game process is in the foreground
+  (`bridge-processes.txt`; `bridge-force-on.txt` forces it for debugging).
+  The gun's digitizer also produces
   synthetic mouse reports; those are filtered, and the OS cursor is pinned only
   while a gun is locked and the real mouse has been idle (see `RawInput.cs`).
 - **Test button** (or Ctrl+T, or `GaimeTray.exe --test`) opens a fullscreen
@@ -96,11 +102,11 @@ WSL repo), next to the other emulator folders. It is self-contained:
 
 ```
 C:\games\feeder\
-  GaimeTray.exe / GaimeFeeder.exe (+ .dll, deps, runtimeconfig, Nefarius)
+  GaimeTray.exe / GaimeFeeder.exe (+ .dll, deps, runtimeconfig)
   guns.json
   calibrations\cal_<sn>.json
-  logs\  (tray-<date>.log, feeder.log, xcheck.log, capture-*.txt)
-  Launch-Tray.cmd   Launch-Feeder.cmd   Feeder.ps1   XCheck.ps1
+  logs\  (tray-<date>.log, bridge-<date>.log, feeder.log, capture-*.txt)
+  Launch-Tray.cmd   Launch-Feeder.cmd   Feeder.ps1
 ```
 
 - Daily driver: `C:\games\feeder\Launch-Tray.cmd` (or the repo's
@@ -111,5 +117,9 @@ C:\games\feeder\
   the repo root.
 - Rebuild + redeploy after source changes: run `tools\Deploy-Feeder.ps1`
   (`dotnet publish -c Release` of both projects into `C:\games\feeder`).
-- Requires **ViGEmBus** (https://github.com/ViGEm/ViGEmBus) and the .NET 8
-  Windows desktop runtime.
+- Requires the .NET 8 Windows desktop runtime and the Pico bridge
+  (`pico/gun_bridge`, flashed and plugged in).
+- Recommended one-time setting (no admin) so Windows does not move the cursor
+  from the guns' touch digitizers:
+  `reg add "HKCU\Software\Microsoft\Wisp\Touch" /v TouchGate /t REG_DWORD /d 0 /f`,
+  then sign out and in. Undo with `/d 1`.

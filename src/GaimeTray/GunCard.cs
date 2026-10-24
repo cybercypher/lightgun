@@ -88,7 +88,7 @@ namespace GaimeTray
         {
             Serial = g.Serial;
             _title.Text = g.Label;
-            _sn.Text = "sn " + g.Serial + "  ·  J" + g.PadIndex;
+            _sn.Text = "sn " + g.Serial + "  ·  P" + g.PadIndex;
             bool live = g.AgeMs < 3000;
             _status.Text = live ? "● LIVE" : "○ QUIET";
             _status.ForeColor = live ? Lime : Dim;

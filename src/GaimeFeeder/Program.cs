@@ -5,19 +5,20 @@ using System.Windows.Forms;
 
 namespace GaimeFeeder
 {
-    // GaimeFeeder: each G'AIM'E gun -> its own ViGEm Xbox360 pad (J1/J2).
-    // Identity key is the on-device system_info.json serial (sn 11111/22222),
-    // written once per gun; USB serials randomize per boot and are unusable.
+    // GaimeFeeder (console): each G'AIM'E gun -> one player on the Pico bridge
+    // (absolute mouse 1/2). Identity key is the on-device system_info.json
+    // serial (sn 11111/22222); USB serials randomize per boot and are unusable.
     //
     //   GaimeFeeder --list          show gun sns + HID routing, exit
     //   GaimeFeeder                 calibrate (if needed) + feed
     //
-    // Requires: ViGEmBus installed. F12 = recalibrate, ESC = quit.
-    // Console keys: T/G pulse P1/P2 trigger, Arrows pulse P1 stick, 1-4 pulse P1 buttons.
+    // Requires: the Pico bridge (pico/gun_bridge). F12 = recalibrate, ESC = quit.
+    // Console keys: T/G pulse P1/P2 trigger, arrows pulse P1 aim to a screen
+    // edge, 1-4 pulse P1 A/B/Coin/Start. Do not run with GaimeTray at the same
+    // time: both would feed the Pico.
     static class Program
     {
         static readonly Dictionary<string, GunState> Guns = new Dictionary<string, GunState>();
-        static readonly Dictionary<string, VigemPad> Pads = new Dictionary<string, VigemPad>();
         static readonly Dictionary<string, (int x, int y)> LatestRaw = new Dictionary<string, (int x, int y)>();
         static readonly Queue<string> PendingCalib = new Queue<string>();
         static CalibrationWindow ActiveCalib;
@@ -28,11 +29,6 @@ namespace GaimeFeeder
         [STAThread]
         static void Main(string[] args)
         {
-            if (args.Contains("--xcheck"))
-            {
-                XCheck.Run();
-                return;
-            }
             bool fresh;
             _mutex = new System.Threading.Mutex(true, "GaimeFeederSingleInstance", out fresh);
             if (!fresh)
@@ -53,37 +49,9 @@ namespace GaimeFeeder
                     Console.WriteLine($"  {kv.Key} -> sn {kv.Value}");
                 return;
             }
-            if (sns.Count == 0)
-            {
-                // Binding mode: no guns needed. Pads exist for T/G test pulses only.
-                Console.WriteLine("No guns found: binding mode (virtual pads only, T/G pulses).");
-                Guns["bind1"] = new GunState("bind1", 1, "Pad 1 (no gun)");
-                Guns["bind2"] = new GunState("bind2", 2, "Pad 2 (no gun)");
-                try
-                {
-                    Pads["bind1"] = new VigemPad(1);
-                    Pads["bind2"] = new VigemPad(2);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Pad creation FAILED: {ex.Message}");
-                    Console.WriteLine("Is ViGEmBus installed? https://github.com/ViGEm/ViGEmBus/releases");
-                    Console.WriteLine("Press any key to exit.");
-                    Console.ReadKey();
-                    return;
-                }
-                var win0 = new RawInputWindow(OnPointer, OnKey);
-                win0.FormClosed += (s, e) => CleanupPads();
-                MainWin = win0;
-                Console.WriteLine("Keys: T = pulse Pad 1 trigger, G = pulse Pad 2 trigger. ESC = quit.");
-                var keys0 = new System.Threading.Thread(ReadKeys) { IsBackground = true };
-                keys0.Start();
-                StartPoll();
-                StartHotplug();
-                Application.Run(win0);
-                return;
-            }
-            Console.WriteLine("Guns: " + string.Join(", ", sns));
+            Console.WriteLine(sns.Count == 0
+                ? "No guns yet: plug one in, hot-plug attaches it within ~10 s."
+                : "Guns: " + string.Join(", ", sns));
 
             var numbering = GunMap.Load(sns);
             foreach (var kv in numbering.OrderBy(kv => kv.Value))
@@ -101,7 +69,6 @@ namespace GaimeFeeder
 
             var win = new RawInputWindow(OnPointer, OnKey);
             RawInputWindow.Log = s => Console.WriteLine("raw: " + s);
-            win.FormClosed += (s, e) => CleanupPads();
             MainWin = win;
             win.Load += (s, e) => CalibrateNext();
             Console.WriteLine("Feeding. F12 = recalibrate, ESC = quit (feeder console focused).");
@@ -115,11 +82,7 @@ namespace GaimeFeeder
 
         static void CalibrateNext()
         {
-            if (ActiveCalib != null || PendingCalib.Count == 0)
-            {
-                EnsurePads();
-                return;
-            }
+            if (ActiveCalib != null || PendingCalib.Count == 0) return;
             string sn = PendingCalib.Dequeue();
             ActiveCalibSn = null; // first trigger locks to whichever gun is used
             ActiveCalib = new CalibrationWindow("Calibrating " + Guns[sn].Label,
@@ -151,35 +114,13 @@ namespace GaimeFeeder
             ActiveCalib.Show();
         }
 
-        static void EnsurePads()
-        {
-            if (OutputConfig.UsePico) return;   // bridge output: no ViGEm pads
-            // Deterministic slots (Change 2): ViGEmBus hands out XInput slots in
-            // connection order, so create pads in pad-index order to guarantee
-            // sn11111 = slot 1 / sn22222 = slot 2.
-            foreach (var g in Guns.Values.OrderBy(g => g.PadIndex))
-                if (g.Calib != null && !Pads.ContainsKey(g.Serial))
-                {
-                    try { Pads[g.Serial] = new VigemPad(g.PadIndex); }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Pad {g.PadIndex} FAILED: {ex.Message}");
-                        Console.WriteLine("Is ViGEmBus installed? https://github.com/ViGEm/ViGEmBus/releases");
-                        Console.WriteLine("Press any key to exit.");
-                        Console.ReadKey();
-                        Environment.Exit(1);
-                    }
-                }
-        }
-
         // Hot-plug: launcher-first flow. The feeder snapshots guns at startup,
         // so a gun plugged after launch was previously ignored forever. A
         // background thread re-enumerates sns every HotplugRescanMs;
         // newcomers attach on the UI thread (cal windows + RawInput map are
         // UI-thread affine).
-        // Binding-mode pads (bind1/bind2) are dropped when the first real gun
-        // arrives so XInput slots stay 1:1 with guns. Removal needs no action:
-        // the GunState stays, its pad just stops receiving reports.
+        // Removal needs no action: the GunState stays and just stops
+        // receiving reports.
         //
         // Rescan interval is deliberately slow: each poll opens the gun's
         // vendor interface and sends a get_info query, and the gun writes a
@@ -216,22 +157,6 @@ namespace GaimeFeeder
         static void AttachGuns(List<string> sns)
         {
             // Runs on the UI thread (see StartHotplug BeginInvoke).
-            bool dropped = false;
-            foreach (var b in new[] { "bind1", "bind2" })
-            {
-                if (Guns.ContainsKey(b))
-                {
-                    Guns.Remove(b);
-                    LatestRaw.Remove(b);
-                    if (Pads.TryGetValue(b, out var p))
-                    {
-                        try { p.Dispose(); } catch { }
-                        Pads.Remove(b);
-                    }
-                    dropped = true;
-                }
-            }
-            if (dropped) Console.WriteLine("Gun detected: binding-mode pads dropped.");
             var allKnown = Guns.Keys.Concat(sns).Distinct().ToList();
             var numbering = GunMap.Load(allKnown);
             foreach (var s in sns)
@@ -246,19 +171,6 @@ namespace GaimeFeeder
                 Console.WriteLine($"Hot-plug: attached {Guns[s].Label} (cal {(c == null ? "needed - aim + trigger" : "loaded")}).");
             }
             try { RawInputWindow.SetSnMap(HidIdentity.PathSuffixToSn()); } catch { }
-            // Deterministic slots (Change 2): if a newcomer outranks an existing
-            // pad's gun (lower PadIndex, e.g. gun 1 hot-plugged after gun 2 was
-            // already on slot 1), ViGEmBus order would put it in the wrong slot.
-            // Dispose every pad; CalibrateNext()->EnsurePads() recreates them in
-            // pad-index order. Otherwise the newcomer just takes the next free
-            // slot, which is already correct.
-            bool needRebuild = sns.Any(s => Guns.TryGetValue(s, out var ng) &&
-                Pads.Keys.Any(ps => Guns.TryGetValue(ps, out var eg) && eg.PadIndex > ng.PadIndex));
-            if (needRebuild)
-            {
-                Console.WriteLine("Hot-plug: rebuilding pads in pad-index order.");
-                CleanupPads();
-            }
             CalibrateNext();
         }
 
@@ -339,62 +251,7 @@ namespace GaimeFeeder
             catch (Exception ex) { Console.WriteLine($"OnKey ERROR: {ex.GetType().Name}: {ex.Message}"); }
         }
 
-        static void Feed(GunState g)
-        {
-            bool testTrig = DateTime.UtcNow < g.TestTriggerUntil;
-            bool testStick = DateTime.UtcNow < g.TestStickUntil;
-            bool testBtn = DateTime.UtcNow < g.TestBtnUntil;
-            bool pico = OutputConfig.UsePico;
-
-            if (g.Calib == null)
-            {
-                // Binding mode is a ViGEm-only aid; the bridge has no sticks.
-                if (pico) return;
-                if (!Pads.TryGetValue(g.Serial, out var bindPad)) return;
-                if (testTrig || testStick || testBtn)
-                    bindPad.Feed(960 + (testStick ? g.TestStickX * 900 : 0),
-                                 540 + (testStick ? g.TestStickY * 500 : 0),
-                                 1920, 1080, true, g, testTrig);
-                return;
-            }
-
-            bool down = g.TriggerDown || testTrig;
-            // Use the latched pre-press aim for the press frame only (so the
-            // trigger jolt cannot drag the shot), then the live position while
-            // the trigger stays down. Holding the latch for the whole hold
-            // froze the aim: on the bridge that is "cannot shoot and move".
-            bool pressFrame = g.PressFramePending && !testTrig;
-            if (g.PressFramePending) g.PressFramePending = false;
-            var (sx, sy, inside) = g.Calib.Map(pressFrame ? g.LatchedX : g.RawX,
-                                               pressFrame ? g.LatchedY : g.RawY);
-            if (testStick)
-            {
-                sx = (g.Calib.ScreenW - 1) / 2 + g.TestStickX * (g.Calib.ScreenW - 1) / 2;
-                sy = (g.Calib.ScreenH - 1) / 2 + g.TestStickY * (g.Calib.ScreenH - 1) / 2;
-            }
-
-            if (pico)
-            {
-                // Absolute mouse: no ValidLock gate; offscreen pull = right.
-                PicoOutput.Feed(g.PadIndex - 1, sx, sy,
-                                g.Calib.ScreenW, g.Calib.ScreenH, inside, g, down);
-                return;
-            }
-
-            if (!Pads.TryGetValue(g.Serial, out var p)) return;
-            // Change 3: aim only on a valid on-screen lock (fast stream + inside
-            // calibration bounds); otherwise write nothing and let the pad hold.
-            // Test pulses bypass the gate so diagnostics still reach the pad.
-            p.Feed(sx, sy, g.Calib.ScreenW, g.Calib.ScreenH,
-                   inside && (g.ValidLock || testStick), g, down);
-        }
-
-        static void CleanupPads()
-        {
-            foreach (var p in Pads.Values)
-                try { p.Dispose(); } catch { }
-            Pads.Clear();
-        }
+        static void Feed(GunState g) => FeedCore.Feed(g);
 
         // Poll loop: Feed is otherwise event-only (pointer/key reports), so test
         // pulses (T/G) expire unseen when the gun is idle. Submit at ~60 Hz.
@@ -420,7 +277,7 @@ namespace GaimeFeeder
 
         static void ReadKeys()
         {
-            Console.WriteLine("Keys: T/G = pulse P1/P2 trigger; Arrows = pulse P1 stick; 1/2/3/4 = pulse P1 A/B/Back/Start. (Console focused only — game keys never reach the feeder.)");
+            Console.WriteLine("Keys: T/G = pulse P1/P2 trigger; Arrows = pulse P1 aim to a screen edge; 1/2/3/4 = pulse P1 A/B/Coin/Start. (Console focused only — game keys never reach the feeder.)");
             while (true)
             {
                 var k = Console.ReadKey(intercept: true).Key;
@@ -443,7 +300,7 @@ namespace GaimeFeeder
                     g1.TestStickX = k == ConsoleKey.LeftArrow ? -1 : k == ConsoleKey.RightArrow ? 1 : 0;
                     g1.TestStickY = k == ConsoleKey.UpArrow ? -1 : k == ConsoleKey.DownArrow ? 1 : 0;
                     g1.TestStickUntil = DateTime.UtcNow.AddMilliseconds(600);
-                    Console.WriteLine($"{g1.Label}: stick pulse {k}");
+                    Console.WriteLine($"{g1.Label}: aim pulse {k}");
                 }
                 else if (g1 != null && k >= ConsoleKey.D1 && k <= ConsoleKey.D4)
                 {

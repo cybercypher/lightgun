@@ -227,6 +227,7 @@ The probe scripts used are in `tools/phase0/`:
   HID collections crashes DsDiag, so a blind sweep is not usable.
 - `Probe-ViGEm.ps1` — creates 1–2 ViGEm pads and records the present HID
   interface paths, usage page/usage, report length, and axis/button caps.
+  (Removed from the repo with the ViGEm output; see git history.)
 
 Run from Windows PowerShell:
 

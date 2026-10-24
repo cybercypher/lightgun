@@ -36,16 +36,12 @@ namespace GaimeFeeder
         }
 
         public static string GunsJson => Path.Combine(Root, "guns.json");
-        // "pico" (default) or "vigem"; one output at a time, never both.
-        public static string OutputConfig => Path.Combine(Root, "output.txt");
         // Optional list of game process names that unlock the bridge output.
         public static string BridgeProcesses => Path.Combine(Root, "bridge-processes.txt");
         // Debug switch: while this file exists, stream regardless of foreground.
         public static string BridgeForce => Path.Combine(Root, "bridge-force-on.txt");
-        // TP latches the gun position while the lightgun's button is down, so a
-        // held trigger freezes the aim. This switch pulses the trigger instead:
-        // the game still sees presses, and the released frames let TP refresh
-        // the aim. Create the file to enable.
+        // Debug switch: while this file exists, the trigger is sent as a square
+        // wave (first line = period in ms). Not needed for any game. Keep it off.
         public static string BridgePulseTrigger => Path.Combine(Root, "bridge-pulse-trigger.txt");
         public static string Calibrations => Path.Combine(Root, "calibrations");
         public static string Logs => Path.Combine(Root, "logs");
