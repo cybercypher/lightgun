@@ -76,13 +76,26 @@ DLL, refuses to overwrite a foreign `opengl32.dll`, and checks that
 
 ## Verifying
 
-`C:\games\teknoparrot\ElfLdr2\ReShade.log` after launching a game from
-TeknoParrot:
+Measured 2026-10-24 22:26 while launching Terminator Salvation from TP
+(`Windowed=1`, 3840x2141 client):
 
 ```
-| INFO  | Initializing crosire's ReShade version '6.8.0.2156' (32-bit) loaded
-          from '...ElfLdr2\opengl32.dll' into '...BudgieLoader.exe' ...
-| INFO  | Successfully compiled '...\GaimeBorder.fx' ...
+| INFO | Initializing crosire's ReShade version '6.8.0.2156' (32-bit) loaded
+         from 'C:\games\teknoparrot\ElfLdr2\OPENGL32.dll' into
+         '...\BudgieLoader.exe' ...
+| INFO | Redirecting wglCreateContext / wglSetPixelFormat ...      <- GL hooked
+| INFO | Resizing device context ... to 3840x2141
+| INFO | Successfully compiled '...\GaimeBorder.fx' in 0.007000 s.
+```
+
+Screenshot at 3840x2160 from that run: the left border is columns 8..39 =
+**32 px** and the top edge is 32 px of border under the window's white title
+bar. The user confirmed in the game that it looks right.
+
+The ReShade log is the check for every future launch:
+
+```
+C:\games\teknoparrot\ElfLdr2\ReShade.log
 ```
 
 If the log does not exist after a launch, the loader did not pick up the proxy
@@ -90,6 +103,15 @@ If the log does not exist after a launch, the loader did not pick up the proxy
 started from TP, not from the game folder). If it initialises but the frame is
 absent, check the preset name and that the technique is enabled
 (`Techniques=GaimeBorder@GaimeBorder.fx`).
+
+**Windowed-mode caveat:** with `Windowed=1` and the custom resolution still at
+3840x2160, the loader creates a 3840x2141 client *plus* a window frame, which is
+larger than the 3840x2160 screen. The window then overflows by ~8 px on the
+right and ~11 px at the bottom, so the right and bottom border edges are cut off
+by the screen (measured: 24 px visible on the right, none at the bottom). In
+fullscreen (`Windowed=0`) the client is a true 3840x2160 and all four edges show
+the full 32 px. For a fully visible frame while windowed, pick a smaller custom
+resolution (e.g. 2560x1440).
 
 Note: because the proxy covers ElfLdr2, a **non-lightgun** ELF game also gets
 the border. Remove the proxy with `-Uninstall` if that is ever a problem.
