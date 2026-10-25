@@ -80,14 +80,16 @@ Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PRO
   each); the gallery builds the eight vendor reports and sends them to the gun
   (see `docs/box-calibration-protocol.md`). The host five-point bbox
   calibration remains the tray Calibrate/F12 path and is separate. Gun **B**
-  toggles the hold-still measurement, gun **C** toggles the Sinden-style white
-  reference border (keyboard **V**, shared with the calibration window), **F**
+  toggles the hold-still measurement, gun **C** toggles the white reference
+  border (keyboard **V**, shared with the calibration window), **F**
   toggles host-side smoothing and keyboard **M** toggles the measurement.
   **ESC** closes the gallery. Every border/smoothing/measure toggle (and closing
   the gallery) writes the settled `noise N.N px, max jump M px, K samples`
   figures for the period that just ended to `logs\tray-<date>.log`, so the
   comparison survives the window. Border geometry lives in `ScreenBorder.cs` so
-  the two windows cannot drift apart.
+  the two windows cannot drift apart. The game gets the **same 32 px** frame
+  from ReShade (`tools/Install-ReshadeBorder.ps1`, target
+  `C:\games\teknoparrot\ElfLdr2`); see `docs/white-border.md`.
 - Aim is low-passed by a 1 euro filter on top of the median-of-5 spike
   rejection: heavy smoothing while still, light while moving. At ~478 Hz the
   rest-state time constant is ~40 ms but drops to a few ms during a fast sweep,
