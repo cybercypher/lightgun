@@ -1,16 +1,15 @@
 # logs/ is local only: tray logs, captures, firmware dumps, config backups,
 # screenshots and the memcard dongle backup never go into the repo
 logs/
-# local decompiler venv and dex dumps (analysis helpers, not source)
-logs/tools/
+
+# build output
 src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
 src/GaimeTray/bin/
 src/GaimeTray/obj/
+
 # local venv for the screenshot/reticle analysis helpers
 .venv/
-logs/shots/
-logs/bridge/
 
 # local rig notes - never published
 HANDOFF.md
