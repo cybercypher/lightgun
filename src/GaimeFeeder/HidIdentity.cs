@@ -150,61 +150,143 @@ namespace GaimeFeeder
         {
             try
             {
-                IntPtr h = CreateFile(vendorPath, RW, SHARE, IntPtr.Zero, OPEN, OVERLAPPED_FLAG, IntPtr.Zero);
-                if (h.ToInt64() == -1) return null;
-                try
-                {
-                    byte[] pl = Encoding.UTF8.GetBytes("sn");
-                    var b = new List<byte> { 7, (byte)pl.Length };
-                    b.AddRange(BitConverter.GetBytes(0u));
-                    b.AddRange(pl);
-                    var a = b.ToArray();
-                    b.AddRange(BitConverter.GetBytes(Crc(a, a.Length)));
-                    while (b.Count < 64) b.Add(0);
-                    byte[] pkt = new byte[65];
-                    Array.Copy(b.ToArray(), 0, pkt, 1, 64);
-                    var o = new OV { HEvent = CreateEvent(IntPtr.Zero, true, false, null) };
-                    try
-                    {
-                        uint w = 0;
-                        if (!WriteFile(h, pkt, 65, ref w, ref o))
-                        {
-                            if (Marshal.GetLastWin32Error() != 997) return null;
-                        }
-                        if (WaitForSingleObject(o.HEvent, 1000) != 0) { CancelIo(h); return null; }
-                        GetOverlappedResult(h, ref o, ref w, false);
-                        if (w != 65) return null;
-                    }
-                    finally { CloseHandle(o.HEvent); }
-                    byte[] buf = new byte[65];
-                    var o2 = new OV { HEvent = CreateEvent(IntPtr.Zero, true, false, null) };
-                    try
-                    {
-                        uint r = 0;
-                        if (!ReadFile(h, buf, 65, ref r, ref o2))
-                        {
-                            if (Marshal.GetLastWin32Error() != 997) return null;
-                        }
-                        if (WaitForSingleObject(o2.HEvent, 1500) != 0) { CancelIo(h); return null; }
-                        GetOverlappedResult(h, ref o2, ref r, false);
-                        if (r < 10) return null;
-                        int len = buf[2];
-                        string s = Encoding.UTF8.GetString(buf, 7, Math.Min(len, buf.Length - 7));
-                        // payload looks like [{"num":"11111"}] — extract the value manually
-                        // (avoids regex quoting pitfalls).
-                        int ni = s.IndexOf("\"num\"");
-                        if (ni < 0) return null;
-                        int c1 = s.IndexOf('"', ni + 5);
-                        if (c1 < 0) return null;
-                        int c2 = s.IndexOf('"', c1 + 1);
-                        if (c2 < 0) return null;
-                        return s.Substring(c1 + 1, c2 - c1 - 1);
-                    }
-                    finally { CloseHandle(o2.HEvent); }
-                }
-                finally { CloseHandle(h); }
+                byte[] pl = Encoding.UTF8.GetBytes("sn");
+                var b = new List<byte> { 7, (byte)pl.Length };
+                b.AddRange(BitConverter.GetBytes(0u));
+                b.AddRange(pl);
+                var a = b.ToArray();
+                b.AddRange(BitConverter.GetBytes(Crc(a, a.Length)));
+                while (b.Count < 64) b.Add(0);
+                byte[] pkt = new byte[65];
+                Array.Copy(b.ToArray(), 0, pkt, 1, 64);
+                if (!SendPacket(vendorPath, pkt, out byte[] buf, out int r, out _)) return null;
+                if (r < 10) return null;
+                int len = buf[2];
+                string s = Encoding.UTF8.GetString(buf, 7, Math.Min(len, buf.Length - 7));
+                // payload looks like [{"num":"11111"}] — extract the value manually
+                // (avoids regex quoting pitfalls).
+                int ni = s.IndexOf("\"num\"");
+                if (ni < 0) return null;
+                int c1 = s.IndexOf('"', ni + 5);
+                if (c1 < 0) return null;
+                int c2 = s.IndexOf('"', c1 + 1);
+                if (c2 < 0) return null;
+                return s.Substring(c1 + 1, c2 - c1 - 1);
             }
             catch { return null; }
+        }
+
+        // One 65-byte vendor report out and one reply back (report ID 0 + 64
+        // bytes, Modbus CRC16 over bytes 0..n-1 in the last two used bytes).
+        static bool SendPacket(string vendorPath, byte[] pkt, out byte[] reply,
+                               out int replyLen, out string error)
+        {
+            reply = new byte[65];
+            replyLen = 0;
+            error = null;
+            IntPtr h = CreateFile(vendorPath, RW, SHARE, IntPtr.Zero, OPEN, OVERLAPPED_FLAG, IntPtr.Zero);
+            if (h.ToInt64() == -1) { error = "CreateFile failed"; return false; }
+            try
+            {
+                var o = new OV { HEvent = CreateEvent(IntPtr.Zero, true, false, null) };
+                try
+                {
+                    uint w = 0;
+                    if (!WriteFile(h, pkt, 65, ref w, ref o))
+                    {
+                        if (Marshal.GetLastWin32Error() != 997) { error = "WriteFile failed"; return false; }
+                    }
+                    if (WaitForSingleObject(o.HEvent, 1000) != 0) { CancelIo(h); error = "write timeout"; return false; }
+                    GetOverlappedResult(h, ref o, ref w, false);
+                    if (w != 65) { error = "short write"; return false; }
+                }
+                finally { CloseHandle(o.HEvent); }
+                var o2 = new OV { HEvent = CreateEvent(IntPtr.Zero, true, false, null) };
+                try
+                {
+                    uint r = 0;
+                    if (!ReadFile(h, reply, 65, ref r, ref o2))
+                    {
+                        if (Marshal.GetLastWin32Error() != 997) { error = "ReadFile failed"; return false; }
+                    }
+                    if (WaitForSingleObject(o2.HEvent, 1500) != 0) { CancelIo(h); error = "no ack"; return false; }
+                    GetOverlappedResult(h, ref o2, ref r, false);
+                    replyLen = (int)r;
+                    return r > 0;
+                }
+                finally { CloseHandle(o2.HEvent); }
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
+            finally { CloseHandle(h); }
+        }
+
+        // func 6 set_info: payload {"path":"sn.num","value":"<sn>"} — the same
+        // write tools/gun_set.ps1 makes. The gun stores it in system_info.json
+        // and applies it immediately; replug so the tray re-identifies it.
+        public static bool SetSn(string vendorPath, string value, out string ack, out string error)
+        {
+            ack = null; error = null;
+            if (string.IsNullOrWhiteSpace(value)) { error = "empty serial"; return false; }
+            byte[] pl = Encoding.UTF8.GetBytes("{\"path\":\"sn.num\",\"value\":\"" + value + "\"}");
+            if (pl.Length > 60) { error = "serial too long"; return false; }
+            var b = new List<byte> { 6, (byte)pl.Length };
+            b.AddRange(BitConverter.GetBytes(0u));
+            b.AddRange(pl);
+            var a = b.ToArray();
+            b.AddRange(BitConverter.GetBytes(Crc(a, a.Length)));
+            while (b.Count < 64) b.Add(0);
+            byte[] pkt = new byte[65];
+            Array.Copy(b.ToArray(), 0, pkt, 1, 64);
+            if (!SendPacket(vendorPath, pkt, out byte[] buf, out int r, out error)) return false;
+            var sb = new StringBuilder();
+            for (int i = 0; i < Math.Min(r, 8); i++) sb.Append(buf[i].ToString("X2")).Append(' ');
+            ack = r + " bytes: " + sb.ToString().Trim();
+            return true;
+        }
+
+        // Exactly one vendor interface is present, i.e. exactly one gun is
+        // plugged in — the condition gun_set.ps1 insists on before writing.
+        // Counts interfaces, not serials: two guns with the same serial are
+        // still two guns.
+        public static string SingleVendorPath(out int count)
+        {
+            var paths = VendorPaths();
+            count = paths.Count;
+            return count == 1 ? paths[0] : null;
+        }
+
+        // Every MI_02 vendor interface currently present (no serial query).
+        public static List<string> VendorPaths()
+        {
+            var paths = new List<string>();
+            Guid g = HidGuid;
+            IntPtr set = SetupDiGetClassDevs(ref g, null, IntPtr.Zero, PRESENT_IFACE);
+            if (set.ToInt64() == -1) return paths;
+            try
+            {
+                for (int i = 0; ; i++)
+                {
+                    var fd = new IFACE { Sz = Marshal.SizeOf(typeof(IFACE)) };
+                    if (!SetupDiEnumDeviceInterfaces(set, IntPtr.Zero, ref g, i, ref fd)) break;
+                    int need = 0;
+                    var dev = new DEVINFO { Sz = Marshal.SizeOf(typeof(DEVINFO)) };
+                    SetupDiGetDeviceInterfaceDetail(set, ref fd, IntPtr.Zero, 0, ref need, ref dev);
+                    IntPtr mem = Marshal.AllocHGlobal(need);
+                    try
+                    {
+                        Marshal.WriteInt32(mem, IntPtr.Size == 8 ? 8 : 6);
+                        dev = new DEVINFO { Sz = Marshal.SizeOf(typeof(DEVINFO)) };
+                        if (!SetupDiGetDeviceInterfaceDetail(set, ref fd, mem, need, ref need, ref dev)) continue;
+                        string path = Marshal.PtrToStringAuto(new IntPtr(mem.ToInt64() + 4));
+                        if (path.IndexOf("vid_2e2c&pid_0631", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (path.IndexOf("mi_02", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        if (!paths.Contains(path)) paths.Add(path);
+                    }
+                    finally { Marshal.FreeHGlobal(mem); }
+                }
+            }
+            finally { SetupDiDestroyDeviceInfoList(set); }
+            return paths;
         }
 
         public static string QuerySnOnce(string vendorPath) => QuerySn(vendorPath);

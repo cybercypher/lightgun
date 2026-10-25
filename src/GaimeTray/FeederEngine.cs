@@ -61,6 +61,10 @@ namespace GaimeTray
             try { Logged?.Invoke(s); } catch { }
         }
 
+        // Log helper for UI that is not part of the feed path (the serial
+        // writer), so its actions land in the same tray log.
+        public void Note(string s) => Emit(s);
+
         public void Start()
         {
             if (Feeding) return;

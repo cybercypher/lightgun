@@ -25,6 +25,7 @@
     <Compile Include="..\GaimeFeeder\RawInput.cs" Link="Engine\RawInput.cs" />
     <Compile Include="..\GaimeFeeder\ScreenBorder.cs" Link="Engine\ScreenBorder.cs" />
     <Compile Include="..\GaimeFeeder\CalibrationWindow.cs" Link="Engine\CalibrationWindow.cs" />
+    <Compile Include="..\GaimeFeeder\SnWriterForm.cs" Link="Engine\SnWriterForm.cs" />
   </ItemGroup>
 
 </Project>

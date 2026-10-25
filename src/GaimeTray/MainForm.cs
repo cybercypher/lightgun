@@ -142,7 +142,14 @@ namespace GaimeTray
             {
                 try { Process.Start("explorer.exe", LogDir()); } catch { }
             };
-            bar.Controls.AddRange(new Control[] { clear, folder });
+            var snBtn = MkBtn("Write S/N", 340, 4);
+            snBtn.Click += (s, e) =>
+            {
+                using (var dlg = new SnWriterForm(_eng.Note)) dlg.ShowDialog(this);
+            };
+            new ToolTip().SetToolTip(snBtn,
+                "Write a gun's on-device serial: plug in ONE gun, type 11111 or 22222, Write, replug");
+            bar.Controls.AddRange(new Control[] { clear, folder, snBtn });
             p.Controls.AddRange(new Control[] { _log, bar });
             return p;
         }
