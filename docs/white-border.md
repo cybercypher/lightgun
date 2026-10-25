@@ -19,12 +19,25 @@ One number lives in two places, both documented here:
 
 Change both together, then redeploy the tray and rerun the ReShade installer.
 
-**What it does and does not do for G'AIM'E.** The gun has no camera: aim is
-computed on-device (NN + LSM6DS3 IMU/AHRS/Kalman), so the border is *not* an IR
-reference and the gun's solver cannot see it. Its job is the player's: a
-constant frame that shows where the game's active area ends (useful with 4:3
-content inside a 16:9 screen) and gives something straight-edged to judge
-off-angle aim against. Sinden's camera does use its border; ours does not.
+**Why the gun cares (corrected 2026-10-24).** G'AIM'E *is* a camera tracker: the
+gun feeds real 224x224 @ 60 fps frames into its NPU (`libvideo.so` →
+`/dev/video3`; the UVC interfaces are only a test-pattern gadget) and fuses that
+with the LSM6DS3 IMU. The box's own apps confirm the frame is a first-class
+feature, not decoration: `hidcommunication.apk` carries
+`game_frame_white`, `game_frame_black`, `game_frame_pink`, the settings button
+`imageButton_configure_game_frame_color` (`setupConfigureGameFrameColor`,
+`updateFrameColorButton`, `updateFrameColorButton`) and the binder pair
+`TRANSACTION_setFrameColorMode` / `getFrameColorMode` — i.e. the colour mode is
+pushed to the device over a transaction, not just painted on the UI. So the
+official firmware offers a white border as a tracking aid, which is exactly the
+Sinden model. The old "no camera, no border, the solver cannot see it" line in
+this repo was wrong; it came from an early look at `/app/bin/gun` strings and
+should not be repeated.
+
+Consequence for us: keep the border on while calibrating (it is, now), and treat
+the gallery's `M` + border toggle as an A/B experiment — same held gun, border on
+vs off, compare the logged `noise X.X px`. If the tracker uses the frame, the
+numbers should move.
 
 ## Tray windows
 
