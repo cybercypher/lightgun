@@ -137,7 +137,7 @@ namespace GaimeTray
             var bar = new Panel { Dock = DockStyle.Bottom, Height = 36, BackColor = Bg };
             var clear = MkBtn("Clear", 8, 4);
             clear.Click += (s, e) => _log.Clear();
-            var folder = MkBtn("Open logs folder", 100, 4);
+            var folder = MkBtn("Open logs folder", 200, 4);
             folder.Click += (s, e) =>
             {
                 try { Process.Start("explorer.exe", LogDir()); } catch { }
