@@ -15,10 +15,10 @@ namespace GaimeTray
     // stream while this window is in front (it is not a game process) unless
     // bridge-force-on.txt exists.
     //
-    // One target at a time: aim at the ring and pull the trigger. A hit scores
-    // and a new target appears. The HUD shows raw, mapped, inside/lock state and
-    // the distance from the last shot to the target centre, which is the actual
-    // calibration error in screen pixels.
+    // One target at a time: aim at the ring and pull the trigger. Every pull
+    // logs the shot vs the target and spawns a new target, hit or miss. The HUD
+    // shows raw, mapped, inside/lock state and the distance from the last shot
+    // to the target centre, which is the actual calibration error in pixels.
     sealed class ShootingGallery : Form
     {
         sealed class GunVis
@@ -71,6 +71,12 @@ namespace GaimeTray
         Target _target;
         bool _live;
         bool _measure;
+
+        // Top-right counter: shots since this gun last fired. Resets as soon
+        // as the other gun pulls the trigger.
+        string _counterSerial;
+        string _counterLabel;
+        int _counterShots;
 
         // Box-side 8-point calibration from inside the gallery. Start/Q toggles
         // it, each trigger pull takes one tap; the first gun to pull (or press
@@ -335,6 +341,15 @@ namespace GaimeTray
             // a stray trigger must not score against a target that is not there.
             if (_boxCal) { SampleBoxCal(g); return; }
 
+            // Top-right counter: one gun at a time; pulling the other gun resets.
+            if (_counterSerial != g.Serial)
+            {
+                _counterSerial = g.Serial;
+                _counterLabel = "P" + g.PadIndex;
+                _counterShots = 0;
+            }
+            _counterShots++;
+
             var shot = new Shot { Color = v.Color, When = DateTime.UtcNow, HasFix = v.HasFix };
             v.Shots++;
             if (v.HasFix)
@@ -348,8 +363,8 @@ namespace GaimeTray
                 {
                     double d = Dist(shot.X, shot.Y, _target.X, _target.Y);
                     v.LastErr = d;
-                    // One line per scored shot, so calibration error can be
-                    // compared from the log (centre vs edges, before vs after).
+                    // One line per pull, hit or miss: target and mapped shot
+                    // are what the calibration is judged on.
                     Log?.Invoke("gallery [shot]: " + v.Label + " miss " + d.ToString("F0") +
                         " px " + (d <= _target.R ? "HIT" : "miss") +
                         " target (" + _target.X.ToString("F0") + "," + _target.Y.ToString("F0") +
@@ -358,12 +373,14 @@ namespace GaimeTray
                     {
                         shot.Hit = true;
                         v.Hits++;
-                        SpawnTarget();
                     }
                 }
             }
             _shots.Add(shot);
             if (_shots.Count > 32) _shots.RemoveAt(0);
+            // Advance on every pull, not only on a hit: the next target must
+            // appear even when the shot is far off.
+            SpawnTarget();
         }
 
         void SpawnTarget()
@@ -430,6 +447,7 @@ namespace GaimeTray
             DrawShots(gfx);
             DrawCrosshairs(gfx);
             DrawHud(gfx);
+            if (!_boxCal) DrawCounter(gfx);
             // On top of the HUD: the top-left and top-right corner targets sit
             // where the status rows live, and the bright ring must stay legible.
             if (_boxCal) DrawBoxCalTarget(gfx);
@@ -654,6 +672,28 @@ namespace GaimeTray
                     gfx.DrawRectangle(pen, bx - 16, by - 12, sz.Width + 32, sz.Height + 24);
                 using (var b = new SolidBrush(Dim))
                     gfx.DrawString(legend, f, b, bx, by);
+            }
+        }
+
+        // Top-right shot counter for the gun that fired last. Switching guns
+        // resets it to 1.
+        void DrawCounter(Graphics gfx)
+        {
+            if (_counterSerial == null) return;
+            float k = Math.Max(1f, Math.Min(ClientSize.Width, ClientSize.Height) / 1200f);
+            string s = _counterLabel + "   " + _counterShots + " shots";
+            using (var f = new Font("Consolas", 24 * k, FontStyle.Bold))
+            {
+                var sz = gfx.MeasureString(s, f);
+                float x = ClientSize.Width - sz.Width - 40 * k;
+                float y = 22 * k;
+                using (var bg = new SolidBrush(Bg))
+                    gfx.FillRectangle(bg, x - 14 * k, y - 6 * k,
+                        sz.Width + 28 * k, sz.Height + 12 * k);
+                var col = Lime;
+                if (_vis.TryGetValue(_counterSerial, out var cv)) col = cv.Color;
+                using (var b = new SolidBrush(col))
+                    gfx.DrawString(s, f, b, x, y);
             }
         }
 
