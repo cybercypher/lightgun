@@ -8,7 +8,7 @@ Status: research + plan, not yet implemented
 > (usage `0x01/0x05`, report ID 0, absolute axes), DS registers that usage, and
 > DS 17.10 binds it (`P1 device plugged and found`). The earlier failure was a
 > stale device path plus the wrong trigger button, not a missing device class.
-> See `HANDOFF.md` §6a and `docs/phase0-evidence.md`. Consequences: vJoy is not
+> See `docs/phase0-evidence.md`. Consequences: vJoy is not
 > required for DS, and the Pico bridge is optional (TP-native / mouse-only
 > consumers), not the critical path.
 
@@ -243,6 +243,6 @@ right args, persisted settings, docs.
 - TeknoParrot lightgun setup: <https://teknoparrot.com/wiki/getstarted.html>
 - Sinden wiki — DemulShooter: <https://www.sindenwiki.org/wiki/Demulshooter>
 - Sinden wiki — Borderless Gaming: <https://www.sindenwiki.org/wiki/Borderless_Gaming>
-- Local gun protocol: `docs/gaime_protocol.md`, `HANDOFF.md`
+- Local gun protocol: `docs/gaime_protocol.md`
 - Local gun binary analysis: `logs/gunref/gun_ref` (`nna_gaime_process`,
   `nna_get_xy`, `Lsm6ds3TR_c_*`, `comp_kalman_filter_update`)

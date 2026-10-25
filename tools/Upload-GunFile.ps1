@@ -11,13 +11,13 @@
 
     Requires a root shell already listening on the console (the gun's boot
     shell is a root prompt; no login). Wiring: GND->GND, adapter TXD->board RX,
-    adapter RXD->board TX, V3.3 unconnected. See HANDOFF.md section 5.
+    adapter RXD->board TX, V3.3 unconnected. See tools/gun/README.md.
 
     Default behaviour (no -NoReplace): write <RemotePath>.new, verify it, then
     `mv` it over <RemotePath> and verify the final file as well.
 
 .EXAMPLE
-    # Deploy the corrected logs watchdog (HANDOFF.md section 4)
+    # Deploy the corrected logs watchdog (see tools/gun/README.md)
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Upload-GunFile.ps1 `
       -LocalPath logs\gunref\logs_watchdog.sh `
       -RemotePath /app/shell/logs_watchdog.sh

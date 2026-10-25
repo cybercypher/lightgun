@@ -212,5 +212,6 @@ latch-ms.txt             optional: press-latch before the trigger, ms (absent = 
 boxcal-headroom.txt      optional: Box Cal headroom percent (absent = 0)
 ```
 
-`HANDOFF.md` records the current state of the rig and every measurement behind
-these decisions; `docs/` holds the protocol and hardware notes.
+`docs/` holds the protocol, hardware and measurement notes behind these
+decisions (start with `docs/calibration-analysis-2026-10-24.md` for why the two
+calibrations exist and what the accuracy numbers are).

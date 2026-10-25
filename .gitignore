@@ -1,7 +1,7 @@
 logs/*.log
 logs/capture-*.txt
 # reference dumps, firmware binaries and bit-verified backups pulled off the
-# guns (HANDOFF4.md) — local artifacts, not source
+# guns — local artifacts, not source
 logs/gunref/
 logs/fw/
 logs/gunsnap/
@@ -16,3 +16,6 @@ src/GaimeTray/obj/
 .venv/
 logs/shots/
 logs/bridge/
+
+# local rig notes - never published
+HANDOFF.md
