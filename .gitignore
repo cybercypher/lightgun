@@ -1,11 +1,6 @@
-logs/*.log
-logs/capture-*.txt
-# reference dumps, firmware binaries and bit-verified backups pulled off the
-# guns — local artifacts, not source
-logs/gunref/
-logs/fw/
-logs/gunsnap/
-logs/gunpull/
+# logs/ is local only: tray logs, captures, firmware dumps, config backups,
+# screenshots and the memcard dongle backup never go into the repo
+logs/
 # local decompiler venv and dex dumps (analysis helpers, not source)
 logs/tools/
 src/GaimeFeeder/bin/
