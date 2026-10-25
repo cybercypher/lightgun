@@ -136,3 +136,18 @@ C:\games\feeder\
   from the guns' touch digitizers:
   `reg add "HKCU\Software\Microsoft\Wisp\Touch" /v TouchGate /t REG_DWORD /d 0 /f`,
   then sign out and in. Undo with `/d 1`.
+
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE) (SPDX: `PolyForm-Noncommercial-1.0.0`).
+
+You may use, change and share this for any **noncommercial** purpose: personal
+use, hobby projects, research, study, charities, schools, public bodies.
+
+**Commercial use is not permitted.** No selling it, no bundling it into a
+product or service you charge for, no deploying it in a venue that makes money
+from it. If you want a commercial licence, open an issue and ask.
+
+Third-party parts keep their own licences: `tools/reshade/ReShade.fxh` is CC0,
+and the Pico firmware links the Raspberry Pi Pico SDK (BSD-3-Clause) and TinyUSB
+(MIT).
