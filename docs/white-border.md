@@ -39,6 +39,29 @@ the gallery's `M` + border toggle as an A/B experiment — same held gun, border
 vs off, compare the logged `noise X.X px`. If the tracker uses the frame, the
 numbers should move.
 
+**Which path actually aims.** `/app/bin/gun` runs two independent sources:
+
+- **IMU first.** `LSM6DS3TR-C` on `/dev/i2c-2` (`/dev/I2C2_LSM6DS3`), read as
+  gyro x/y/z with per-axis bias (`get_gyrozero*`, `FusionOffset*`), fused by
+  **Fusion AHRS** (`FusionAhrsUpdateNoMagnetometer`, quaternion → `comp_imu_get_yaw/
+  pitch/roll`) and a Kalman filter. This is what makes the gun work with no
+  screen reference at all.
+- **Camera second.** `/dev/video3` → `comp_video_start` → 224x224 frames into the
+  NPU (`nna_gaime_open/process`, `model/gaime/gaime.ezb`) → `nna_get_xy`, with a
+  distance estimate (`calculate_distance`, `kalman_filter_modify_distance`,
+  `cal_mean_second_distance_vector`). This is the absolute/drift/distance
+  correction the white frame feeds.
+
+So the border only matters to the camera path. **Gun 1 has the operator's 3D-printed
+black lens cover**, and it still aims (~31 px in the gallery): that is the IMU
+path running alone, which is also why an anchorless gun drifts and needs
+recalibration. A border A/B on Gun 1 must therefore show *no* change; Gun 2 is
+the sighted gun and the one to measure.
+
+Hypothesis worth checking: the covered lens is zero light into the ISP, and the
+handoff's `ISP0 select timeout → mcsi_reset → sensor_set_stream` loop appeared on
+Gun 1 — the cover may be part of why that loop shows up there.
+
 ## Tray windows
 
 `ScreenBorder` is shared, `Enabled` defaults to **true**, and the toggles stay
