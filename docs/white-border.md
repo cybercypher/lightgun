@@ -1,7 +1,7 @@
 # The white reference border (one thickness, everywhere)
 
 Rule: every white reference border is **32 screen pixels** thick and is on by
-default. Gallery, 5-point calibration window and the game (ReShade over
+default. Gallery, host calibration window and the game (ReShade over
 TeknoParrot's ELF loader) all draw the same 32 px.
 
 Why a fixed pixel count and not a percentage: the border is the frame the
@@ -14,7 +14,7 @@ One number lives in two places, both documented here:
 
 | where | constant |
 |---|---|
-| tray gallery + 5-point window | `src/GaimeFeeder/ScreenBorder.cs`, `ScreenBorder.Pixels = 32` |
+| tray gallery + host calibration window | `src/GaimeFeeder/ScreenBorder.cs`, `ScreenBorder.Pixels = 32` |
 | ReShade over the game | `tools/reshade/GaimeBorder.fx` / preset `BORDER_PX=32` |
 
 Change both together, then redeploy the tray and rerun the ReShade installer.

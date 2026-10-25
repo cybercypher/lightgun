@@ -3,7 +3,7 @@ using System.Drawing;
 
 namespace GaimeFeeder
 {
-    // Sinden-style white reference border, shared by the 5-point calibration
+    // Sinden-style white reference border, shared by the host calibration
     // window, the tray gallery and the ReShade border over a game.
     //
     // One process-wide switch and ONE THICKNESS IN SCREEN PIXELS. Do not make

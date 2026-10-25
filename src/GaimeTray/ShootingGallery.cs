@@ -264,8 +264,9 @@ namespace GaimeTray
         {
             string serial = _boxSerial ?? g.Serial;
             string label = _boxLabel ?? g.Label;
+            int headroom = AppPaths.ReadInt(AppPaths.BoxCalHeadroom, 0, 0, 20);
             byte[][] reports = GunBoxCal.BuildReports(ClientSize.Width, ClientSize.Height,
-                _boxPoints, out string error);
+                _boxPoints, out string error, headroom);
             if (reports == null)
             {
                 Log?.Invoke("gallery [boxcal]: " + label + " build FAILED: " + error);
@@ -287,7 +288,8 @@ namespace GaimeTray
                 return;
             }
             foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
-            Log?.Invoke("gallery [boxcal]: " + label + " sent 8 reports");
+            Log?.Invoke("gallery [boxcal]: " + label + " sent 8 reports (headroom " +
+                headroom + "%). Run the host calibration again for this gun.");
             ExitBoxCal();
         }
 
@@ -369,6 +371,7 @@ namespace GaimeTray
                         " px " + (d <= _target.R ? "HIT" : "miss") +
                         " target (" + _target.X.ToString("F0") + "," + _target.Y.ToString("F0") +
                         ") shot (" + shot.X.ToString("F0") + "," + shot.Y.ToString("F0") + ")");
+                    LogLagSweep(g, v.Label, cal);
                     if (d <= _target.R)
                     {
                         shot.Hit = true;
@@ -383,6 +386,30 @@ namespace GaimeTray
             SpawnTarget();
         }
 
+        // Lag sweep for the pull just scored: the miss if the press aim had
+        // been taken N ms before the trigger switch closed (GunState.PressLagMs),
+        // plus the unfiltered report at the debounced edge ("in"). Picks the
+        // latch-ms.txt value from data (tools/gallery_report.py).
+        void LogLagSweep(GunState g, string label, RectCalib cal)
+        {
+            if (_target == null) return;
+            var sb = new System.Text.StringBuilder();
+            sb.Append("gallery [lag]: ").Append(label)
+              .Append(" target (").Append(_target.X.ToString("F0")).Append(',')
+              .Append(_target.Y.ToString("F0")).Append(')');
+            void Add(string name, int rx, int ry)
+            {
+                var (mx, my, _) = cal.Map(rx, ry);
+                double d = Dist((float)mx, (float)my, _target.X, _target.Y);
+                sb.Append(" | ").Append(name).Append(" (").Append(rx).Append(',').Append(ry)
+                  .Append(") ").Append(d.ToString("F0")).Append("px");
+            }
+            Add("in", g.PressInX, g.PressInY);
+            for (int k = 0; k < GunState.PressLagMs.Length; k++)
+                Add(GunState.PressLagMs[k] + "ms", g.PressLagX[k], g.PressLagY[k]);
+            Log?.Invoke(sb.ToString());
+        }
+
         void SpawnTarget()
         {
             int w = ClientSize.Width, h = ClientSize.Height;
@@ -394,11 +421,26 @@ namespace GaimeTray
                 _target = new Target { X = w / 2f, Y = h / 2f, R = r };
                 return;
             }
+            // One target in four sits in the outer band - centre 40 px to
+            // `margin` from the left, right or bottom edge - so the edges, where
+            // the calibration extrapolates and the gun's raw output can clamp,
+            // are measured too. The top edge stays clear for the HUD.
+            bool edge = _rng.Next(4) == 0;
             for (int i = 0; i < 40; i++)
             {
                 float x = _rng.Next(margin, w - margin);
                 // Keep the top strip (HUD) clear of targets.
                 float y = _rng.Next(margin + 110, h - margin);
+                if (edge)
+                {
+                    int d = _rng.Next(40, margin);
+                    switch (_rng.Next(3))
+                    {
+                        case 0: x = d; break;            // left band
+                        case 1: x = w - d; break;        // right band
+                        default: y = h - d; break;       // bottom band
+                    }
+                }
                 if (_target != null && Dist(x, y, _target.X, _target.Y) < r * 3 + 120) continue;
                 _target = new Target { X = x, Y = y, R = r };
                 return;

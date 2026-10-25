@@ -67,11 +67,15 @@ namespace GaimeFeeder
                     (int)Math.Round(YFrac(index, w, h) * h));
         }
 
-        static int BaseX(int index, int width) =>
-            Clamp16((int)Math.Round(XFrac(index) * 32768.0));
+        // scale < 1 pulls the base points toward the screen centre (headroom):
+        // the gun then reports values nearer the centre for the same aim, so
+        // its raw range reaches past the screen edges. scale = 1 is the box's
+        // own behaviour.
+        static int BaseX(int index, int width, double scale) =>
+            Clamp16((int)Math.Round((0.5 + (XFrac(index) - 0.5) * scale) * 32768.0));
 
-        static int BaseY(int index, int width, int height) =>
-            Clamp16((int)Math.Round(YFrac(index, width, height) * 32768.0));
+        static int BaseY(int index, int width, int height, double scale) =>
+            Clamp16((int)Math.Round((0.5 + (YFrac(index, width, height) - 0.5) * scale) * 32768.0));
 
         // Raw 0..10000 aim -> the gun's 16-bit calibration space.
         public static int Sample16(int raw) =>
@@ -87,9 +91,12 @@ namespace GaimeFeeder
 
         // points[i] holds the three taps for point i as
         // { rawX0, rawY0, rawX1, rawY1, rawX2, rawY2 }.
+        // headroomPct 0 = the box's base points; N pulls them N% toward the
+        // centre (see AppPaths.BoxCalHeadroom).
         public static byte[][] BuildReports(int width, int height,
-            IReadOnlyList<int[]> points, out string error)
+            IReadOnlyList<int[]> points, out string error, int headroomPct = 0)
         {
+            double scale = 1.0 - Math.Max(0, Math.Min(20, headroomPct)) / 100.0;
             error = null;
             if (width <= 0 || height <= 0)
             {
@@ -130,8 +137,8 @@ namespace GaimeFeeder
                     Put16(r, 7 + 8 * t, Sample16(taps[t * 2]));
                     Put16(r, 11 + 8 * t, Sample16(taps[t * 2 + 1]));
                 }
-                Put16(r, 31, BaseX(i, width));
-                Put16(r, 35, BaseY(i, width, height));
+                Put16(r, 31, BaseX(i, width, scale));
+                Put16(r, 35, BaseY(i, width, height, scale));
                 Put16(r, 39, Crc16(r, 39));
                 reports[i] = r;
             }

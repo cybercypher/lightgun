@@ -43,7 +43,34 @@ namespace GaimeFeeder
         // Debug switch: while this file exists, the trigger is sent as a square
         // wave (first line = period in ms). Not needed for any game. Keep it off.
         public static string BridgePulseTrigger => Path.Combine(Root, "bridge-pulse-trigger.txt");
+        // Press latch in ms before the trigger switch closes (first line, an
+        // integer 0..300). Absent = 0. Read once when the tray starts.
+        public static string LatchMs => Path.Combine(Root, "latch-ms.txt");
+        // Box Cal headroom in percent (first line, an integer 0..20). Absent =
+        // 0. While set, Box Cal pulls the eight base points that far toward the
+        // screen centre, so the gun's raw range covers more than the screen.
+        // Run the host calibration again after every Box Cal.
+        public static string BoxCalHeadroom => Path.Combine(Root, "boxcal-headroom.txt");
         public static string Calibrations => Path.Combine(Root, "calibrations");
         public static string Logs => Path.Combine(Root, "logs");
+
+        // First line of a switch file as an integer clamped to min..max;
+        // fallback when the file is absent or does not parse.
+        public static int ReadInt(string path, int fallback, int min, int max)
+        {
+            try
+            {
+                if (!File.Exists(path)) return fallback;
+                foreach (var line in File.ReadAllLines(path))
+                {
+                    var s = line.Trim();
+                    if (s.Length == 0) continue;
+                    if (!int.TryParse(s, out int v)) return fallback;
+                    return Math.Max(min, Math.Min(max, v));
+                }
+            }
+            catch { }
+            return fallback;
+        }
     }
 }

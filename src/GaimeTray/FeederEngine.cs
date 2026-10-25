@@ -82,6 +82,10 @@ namespace GaimeTray
             _raw.Show(); // invisible (Opacity 0): exists only for INPUTSINK
             Feeding = true;
             Emit("Output: Pico bridge (" + PicoOutput.Probe() + ")");
+            GunState.LatchMs = AppPaths.ReadInt(AppPaths.LatchMs, 0, 0, 300);
+            Emit("Press latch: " + GunState.LatchMs + " ms before the trigger switch closes (latch-ms.txt). " +
+                "Box Cal headroom: " + AppPaths.ReadInt(AppPaths.BoxCalHeadroom, 0, 0, 20) +
+                "% (boxcal-headroom.txt).");
             Emit(sns.Count == 0
                 ? "No guns yet: plug one in, it attaches within ~10 s."
                 : "Feeding: " + string.Join(", ", sns));
@@ -207,9 +211,8 @@ namespace GaimeTray
             string sn = _pendingCal.Dequeue();
             if (!_guns.ContainsKey(sn)) { CalibrateNext(); return; }
             _calibSn = null;
-            // Sample the pre-press latched aim (filtered, ~100 ms before the
-            // debounced edge), not the raw report at the edge: the trigger
-            // jolt moves the raw aim by 144-810 counts.
+            // Sample the press aim the game gets on its press frame: the
+            // filtered aim GunState.LatchMs before the trigger switch closed.
             var cg = _guns[sn];
             _calib = new CalibrationWindow("Calibrating " + cg.Label,
                 () => (cg.LatchedX, cg.LatchedY));
@@ -221,10 +224,11 @@ namespace GaimeTray
                 {
                     _calib.Result.Save(target);
                     if (_guns.TryGetValue(target, out var g)) g.Calib = _calib.Result;
-                    Emit(_guns[target].Label + ": calibrated.");
+                    Emit(_guns[target].Label + ": calibrated (" + _calib.FitInfo + ").");
                 }
                 else if (_calib.DialogResult == DialogResult.OK)
-                    Emit(_guns[target].Label + ": bad samples, skipped (Calibrate to retry).");
+                    Emit(_guns[target].Label + ": bad samples, skipped (" + _calib.FitInfo +
+                        "; Calibrate to retry).");
                 else
                     Emit(_guns[target].Label + ": calibration skipped.");
                 _calib = null;

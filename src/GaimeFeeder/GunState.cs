@@ -150,12 +150,32 @@ namespace GaimeFeeder
         int _mi;
         bool _filterSeeded;
 
-        // Latch-and-hold: ring of pre-press positions, trigger jump is 144-810 counts.
-        const int LatchN = 32;
+        // Press latch: ring of filtered positions with their Stopwatch time.
+        // The latch is time-based, not sample-based: the guns report at ~99 Hz
+        // in practice, not the ~265 Hz the old 26-sample latch assumed, so the
+        // old latch reached ~260 ms back instead of ~100 ms. 128 entries hold
+        // >= 480 ms at 265 Hz and ~1.3 s at 99 Hz.
+        const int LatchN = 128;
         readonly int[] _lx = new int[LatchN];
         readonly int[] _ly = new int[LatchN];
-        int _li;
+        readonly long[] _lt = new long[LatchN];
+        int _li, _lcount;
         public int LatchedX, LatchedY;
+
+        // How far before the trigger switch closes (first tip report) the
+        // press aim is taken. Set once at start from latch-ms.txt
+        // (FeederEngine.Start). 0 = the aim at the moment the switch closed:
+        // the 2026-10-24 gallery data showed the old ~260 ms latch no better
+        // than the edge sample on Gun 2 and worse on Gun 1.
+        public static int LatchMs = 0;
+
+        // Lag sweep, captured on every press edge for the gallery log: the
+        // filtered aim this many ms before the switch closed, plus the
+        // unfiltered report at the debounced edge (PressInX/Y).
+        public static readonly int[] PressLagMs = { 0, 25, 50, 100, 150, 250 };
+        public readonly int[] PressLagX = new int[PressLagMs.Length];
+        public readonly int[] PressLagY = new int[PressLagMs.Length];
+        public int PressInX, PressInY;
 
         public bool BtnA, BtnB, BtnCoin, BtnStart;
 
@@ -165,6 +185,24 @@ namespace GaimeFeeder
             PadIndex = padIndex;
             Label = label;
         }
+
+        // Newest ring sample taken at or before Stopwatch time t (the oldest
+        // sample if the ring does not reach that far back).
+        (int x, int y) AimAt(long t)
+        {
+            int n = Math.Min(_lcount, LatchN);
+            int idx = ((_li - 1) % LatchN + LatchN) % LatchN;
+            for (int k = 0; k < n; k++)
+            {
+                int i = ((_li - 1 - k) % LatchN + LatchN) % LatchN;
+                idx = i;
+                if (_lt[i] <= t) break;
+            }
+            return (_lx[idx], _ly[idx]);
+        }
+
+        static long MsToTicks(int ms) =>
+            (long)(ms * (double)System.Diagnostics.Stopwatch.Frequency / 1000.0);
 
         public void PushPointer(int x, int y, bool tip, bool inRange)
         {
@@ -197,13 +235,17 @@ namespace GaimeFeeder
             RawInputWindow.NoteGunLock(ValidLock);
             // Latch ring stores filtered positions too: the pre-press latch must
             // not capture a glitch sample just before the trigger edge.
-            _lx[_li] = fx; _ly[_li] = fy; _li = (_li + 1) % LatchN;
+            _lx[_li] = fx; _ly[_li] = fy; _lt[_li] = now;
+            _li = (_li + 1) % LatchN;
+            if (_lcount < LatchN) _lcount++;
 
             if (tip)
             {
                 _tipOffRun = 0;
                 _tipOnRun++;
-                if (_tipOnRun == 1) _tipOnT0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                // Switch-close time = this report's time, so AimAt(_tipOnT0)
+                // returns this report's own sample.
+                if (_tipOnRun == 1) _tipOnT0 = now;
                 // Debounce press: >=3 consecutive tip reports spanning >=4 ms
                 // (Stopwatch time; ~7.5 ms nominal at 265 Hz).
                 if (!TriggerDown && _tipOnRun >= 3 && MsSince(_tipOnT0) >= 4)
@@ -211,10 +253,11 @@ namespace GaimeFeeder
                     TriggerDown = true;
                     TriggerEdge = DateTime.UtcNow;
                     LastPressSpanMs = MsSince(_tipOnT0);
-                    // Latch position ~100 ms before the edge (not the jumped at-press sample).
-                    int back = Math.Min(LatchN - 1, 26); // ~100 ms at 265 Hz
-                    int idx = ((_li - 1 - back) % LatchN + LatchN) % LatchN;
-                    LatchedX = _lx[idx]; LatchedY = _ly[idx];
+                    // Press aim: LatchMs before the switch closed (time-based).
+                    (LatchedX, LatchedY) = AimAt(_tipOnT0 - MsToTicks(LatchMs));
+                    for (int k = 0; k < PressLagMs.Length; k++)
+                        (PressLagX[k], PressLagY[k]) = AimAt(_tipOnT0 - MsToTicks(PressLagMs[k]));
+                    PressInX = x; PressInY = y;
                     PressFramePending = true;
                 }
                 return;

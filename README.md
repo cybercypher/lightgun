@@ -58,7 +58,8 @@ Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PRO
 ## Tray app (`src/GaimeTray`, C# net8.0-windows)
 
 - Per gun → Pico bridge mouse P1/P2: absolute calibrated aim; **trigger → left
-  button** (debounced; the press frame uses the pre-press latched aim), B → right,
+  button** (debounced; the press frame uses the aim `latch-ms.txt` ms before the
+  trigger switch closed, default 0), B → right,
   A → middle, Coin → back, Start → forward (`docs/buttons.md`).
 - Stable names in `guns.json`: Gun 1 = sn `11111`, Gun 2 = sn `22222`
   (on-device serials, stable across reboots/ports — see `docs/identity.md`).
@@ -78,8 +79,14 @@ Gun 2 (sn 22222) ──┘          │ CDC, 12-byte frames (pico/gun_bridge/PRO
   pull the trigger locks the run to that serial. Aim at each lime target and
   pull the trigger three times (one tap per 400 ms, eight targets, three taps
   each); the gallery builds the eight vendor reports and sends them to the gun
-  (see `docs/box-calibration-protocol.md`). The host five-point bbox
-  calibration remains the tray Calibrate/F12 path and is separate. Gun **B**
+  (see `docs/box-calibration-protocol.md`). The **host calibration** is
+  separate: tray Calibrate/F12, a 3×3 grid of targets W/14 in from the edges,
+  three pulls each, least-squares fit. Run it again after every Box Cal.
+  `boxcal-headroom.txt` (a percent, e.g. `12`) pulls the Box Cal base points
+  toward the centre so the gun's raw range reaches past the screen edges
+  (see `docs/calibration-analysis-2026-10-24.md`). Every gallery pull logs a
+  `gallery [shot]` and a `gallery [lag]` line; `tools/gallery_report.py <log>`
+  turns them into misses, scale error, a lag sweep and a refit. Gun **B**
   toggles the hold-still measurement, gun **C** toggles the white reference
   border (keyboard **V**, shared with the calibration window), **F**
   toggles host-side smoothing and keyboard **M** toggles the measurement.
