@@ -1,5 +1,10 @@
 # G'AIM'E Lightgun → Pico bridge (absolute mice) for TeknoParrot / DemulShooter
 
+**Setting this up from scratch? Start with [`docs/SETUP.md`](docs/SETUP.md)** —
+flashing the bridge, writing the gun serials, the calibration order, TeknoParrot
+/ DemulShooter bindings, the in-game white border and troubleshooting, in one
+place. The tray build is attached to the [releases](../../releases).
+
 Goal: make each G'AIM'E gun appear as its **own absolute mouse** on a Pico bridge
 (Bridge Mouse 1 / Bridge Mouse 2) so 2 guns work simultaneously in TeknoParrot /
 DemulShooter, with calibration. Pattern follows `psakhis/guncon2` (per-gun `index`)
