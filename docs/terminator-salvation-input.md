@@ -44,6 +44,17 @@ them):
 | Grenades P1 | `MiddleButton` |
 | Start Button P1 | `Button5` (forward) — accepted by the UI but not seen in game |
 | Coin | `Button4` (back) — same |
+| P2 Light Gun | `G'AIM'E Bridge Mouse 2` (`MI_01`) |
+| Trigger P2 | `LeftButton` on mouse 2 |
+| Reload P2 | `RightButton` |
+| Grenades P2 | `MiddleButton` |
+| Start Button P2 | `Button5` |
+
+The P2 rows were **unbound** until 2026-10-24: they existed in the profile with no
+`RawInputButton` at all, so TP only ever opened Bridge Mouse 1 and every P2
+report was dropped (aim included, not just buttons). Binding them to `MI_01`
+made gun 2 work in-game (user-confirmed). Backup:
+`logs/Terminator.xml.pre-p2-bind`.
 
 Enum values matter: TP's `RawMouseButton` is
 `None, LeftButton, RightButton, MiddleButton, Button4, Button5`. Writing
