@@ -59,7 +59,7 @@ follow it instead of this page. Reopen it any time from the tray menu
 | System check | display scaling 100 %, both bridge mice, the bridge COM port, guns connected; **Flash bridge…** copies `gun_bridge.uf2` to a Pico held in BOOTSEL |
 | Guns | lists the connected guns by serial, flags guns that share a serial, **Write serial…** (one gun at a time, §3), assigns Player 1 / 2 and saves `guns.json` |
 | Calibrate | per gun: **1 · Box Cal → 2 · Host grid → 3 · Test**, with the time of each and a warning when the host grid is older than the last Box Cal or was made at another resolution |
-| Games | DemulShooter folder + **Bind to bridge** (kept bound on every tray start); TeknoParrot folder + which profiles have both guns bound (read-only); the ReShade white border for ElfLdr2 games; the list of game processes that turn the bridge on (`bridge-processes.txt`) |
+| Games | DemulShooter folder + **Bind to bridge** (kept bound on every tray start); TeknoParrot folder, which profiles have both guns bound, and **Bind to guns**; the ReShade white border for ElfLdr2 games; the list of game processes that turn the bridge on (`bridge-processes.txt`) |
 | Finish | summary, start with Windows |
 
 While the wizard is open, a gun without a host calibration does not pop the
@@ -151,7 +151,12 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 
 ## 5. TeknoParrot
 
-1. Point TP at the game and set **Input API = RawInput**.
+1. Add the game in TP once (so `UserProfiles\<Game>.xml` exists), then close TP.
+   In the wizard's Games page select the game and press **Bind to guns**. It
+   sets **Input API = RawInput** and writes every gun row below for both
+   players (with a timestamped backup); operator rows (Test, Service, Volume,
+   test-menu navigation) keep what you bound. Start/Coin go to the gun's own
+   Start/Coin buttons (Button5/Button4). The manual route, for reference:
 2. In `UserProfiles\<Game>.xml`, bind the lightguns to the bridge mice. TP's
    controller page cannot capture left/right/middle for a binding and it
    overwrites hand edits, so edit the XML with TP closed:
@@ -162,7 +167,9 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
    | Trigger P1 | Bridge Mouse 1, `LeftButton` |
    | Reload P1 | Bridge Mouse 1, `RightButton` |
    | Grenades P1 | Bridge Mouse 1, `MiddleButton` |
-   | P2 Light Gun / Trigger / Reload / Grenades | same four on Bridge Mouse 2 |
+   | Start Button P1 | Bridge Mouse 1, `Button5` (gun Start) |
+   | Coin | Bridge Mouse 1, `Button4` (gun 1 Coin) |
+   | P2 Light Gun / Trigger / Reload / Grenades / Start | same on Bridge Mouse 2 |
 
    The device path looks like
    `\\?\HID#VID_1209&PID_0A11&MI_00#a&1b234567&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}`

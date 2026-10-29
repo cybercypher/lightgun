@@ -41,7 +41,9 @@ namespace GaimeTray
             tpBrowse.Click += (s, e) => Browse(_tpDir, SetupConfig.TeknoParrotExe);
             var tpFind = Ui.Btn("Find", 548, y + 23, 90);
             tpFind.Click += (s, e) => { _tpDir.Text = SetupConfig.DetectTeknoParrot() ?? _tpDir.Text; Refresh_(); };
-            _tpState = Ui.Text("", 0, y + 58, 500, 36, Ui.Dim);
+            _tpState = Ui.Text("", 0, y + 58, 362, 36, Ui.Dim);
+            var tpBind = Ui.Btn("Bind to guns", 370, y + 54, 130);
+            tpBind.Click += (s, e) => BindTp();
             var tpOpen = Ui.Btn("Open profiles", 508, y + 54, 130);
             tpOpen.Click += (s, e) =>
             {
@@ -57,7 +59,7 @@ namespace GaimeTray
             _profiles.Columns.Add("Game profile", 360);
             _profiles.Columns.Add("P1 gun", 130);
             _profiles.Columns.Add("P2 gun", 130);
-            Controls.AddRange(new Control[] { _tpDir, tpBrowse, tpFind, _tpState, tpOpen, _profiles });
+            Controls.AddRange(new Control[] { _tpDir, tpBrowse, tpFind, _tpState, tpBind, tpOpen, _profiles });
 
             // ---- white border (ReShade) for ElfLdr2 games
             y += 216;
@@ -143,12 +145,13 @@ namespace GaimeTray
                 {
                     var item = new ListViewItem(new[] { p.Game, p.P1 ? "Bridge Mouse 1" : "—", p.P2 ? "Bridge Mouse 2" : "—" });
                     item.ForeColor = p.P1 && p.P2 ? Ui.Lime : p.P1 ? Ui.Amber : Ui.Dim;
+                    item.Tag = p;
                     _profiles.Items.Add(item);
                 }
                 int full = list.Count(p => p.P1 && p.P2);
                 State(_tpState, list.Count == 0 ? Check.Warn : full > 0 ? Check.Ok : Check.Warn,
                     list.Count == 0 ? "no game profiles yet — add a game in TeknoParrot first"
-                    : full + " of " + list.Count + " profiles bound for two guns. Bind in UserProfiles\\<Game>.xml with TP closed (SETUP.md §5).");
+                    : full + " of " + list.Count + " profiles bound for two guns. Select games, then Bind to guns.");
             }
             if (cfg.TeknoParrotDir.Length == 0) State(_borderState, Check.Info, "set the TeknoParrot folder first");
             else
@@ -188,6 +191,42 @@ namespace GaimeTray
                 State(_borderState, Check.Ok, msg);
             }
             catch (Exception ex) { State(_borderState, Check.Fail, ex.Message); }
+        }
+
+        // Selected profiles, or every profile not yet bound for two guns.
+        void BindTp()
+        {
+            var picked = _profiles.SelectedItems.Cast<ListViewItem>().Select(i => (TeknoParrotProfiles.Profile)i.Tag).ToList();
+            if (picked.Count == 0)
+                picked = _profiles.Items.Cast<ListViewItem>().Select(i => (TeknoParrotProfiles.Profile)i.Tag)
+                    .Where(p => !(p.P1 && p.P2)).ToList();
+            if (picked.Count == 0) { State(_tpState, Check.Ok, "every profile is already bound"); return; }
+            if (TeknoParrotProfiles.Running())
+            {
+                MessageBox.Show(this, "Close TeknoParrot first: it reads profiles at startup and writes them back when you save its settings.",
+                    "TeknoParrot", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var mice = BridgeDevices.Mice();
+            int ok = 0;
+            string last = "";
+            foreach (var p in picked)
+            {
+                try
+                {
+                    last = p.Game + ": " + TeknoParrotProfiles.Bind(p.File, mice);
+                    Wizard.Engine.Note("setup: TeknoParrot " + last);
+                    ok++;
+                }
+                catch (Exception ex)
+                {
+                    last = p.Game + ": " + ex.Message;
+                    Wizard.Engine.Note("setup: TeknoParrot " + last);
+                }
+            }
+            Refresh_();
+            State(_tpState, ok == picked.Count ? Check.Ok : Check.Fail,
+                ok + " of " + picked.Count + " bound. " + (picked.Count == 1 ? last : "Details in the Log tab."));
         }
 
         void BindDs()
