@@ -26,6 +26,9 @@
     <Compile Include="..\GaimeFeeder\ScreenBorder.cs" Link="Engine\ScreenBorder.cs" />
     <Compile Include="..\GaimeFeeder\CalibrationWindow.cs" Link="Engine\CalibrationWindow.cs" />
     <Compile Include="..\GaimeFeeder\SnWriterForm.cs" Link="Engine\SnWriterForm.cs" />
+    <Compile Include="..\GaimeFeeder\SetupConfig.cs" Link="Engine\SetupConfig.cs" />
+    <Compile Include="..\GaimeFeeder\BridgeDevices.cs" Link="Engine\BridgeDevices.cs" />
+    <Compile Include="..\GaimeFeeder\CalStatus.cs" Link="Engine\CalStatus.cs" />
   </ItemGroup>
 
 </Project>

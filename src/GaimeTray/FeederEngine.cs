@@ -11,6 +11,8 @@ namespace GaimeTray
     sealed class GunSnapshot
     {
         public string Serial, Label;
+        // Why the host grid needs redoing (CalStatus), or null.
+        public string CalProblem;
         public int PadIndex, RawX, RawY;
         public bool TriggerDown, BtnA, BtnB, BtnCoin, BtnStart, Calibrated;
         public double AgeMs, RateHz;
@@ -28,6 +30,10 @@ namespace GaimeTray
 
         public bool Feeding { get; private set; }
 
+        // Off while the setup wizard is open: it runs Box Cal before the host
+        // grid, so an uncalibrated gun must not pop the grid on attach.
+        public bool AutoCalibrate { get; set; } = true;
+
         // Hot-plug rescan interval. Each poll opens the gun's vendor interface
         // and sends a get_info query; the gun writes an ~85-byte heartbeat log
         // line per query. 2 s produced ~3.7 MB/day and filled the gun's 3.9 MB
@@ -37,6 +43,7 @@ namespace GaimeTray
         readonly Dictionary<string, GunState> _guns = new Dictionary<string, GunState>();
         readonly Dictionary<string, (int x, int y)> _latest = new Dictionary<string, (int x, int y)>();
         readonly Queue<string> _pendingCal = new Queue<string>();
+        readonly Dictionary<string, string> _calProblem = new Dictionary<string, string>();
         CalibrationWindow _calib;
         string _calibSn;
         ShootingGallery _gallery;
@@ -48,6 +55,12 @@ namespace GaimeTray
         public FeederEngine()
         {
             _ui = SynchronizationContext.Current ?? new SynchronizationContext();
+            ShootingGallery.BoxCalSent = sn =>
+            {
+                lock (_guns)
+                    if (_guns.TryGetValue(sn, out var g)) _calProblem[sn] = CalStatus.GridProblem(sn, g.Calib);
+                GunsChanged?.Invoke();
+            };
         }
 
         void Emit(string s)
@@ -118,6 +131,34 @@ namespace GaimeTray
             GunsChanged?.Invoke();
         }
 
+        // guns.json changed (player reassigned): rebuild every gun from it.
+        // GunState's player number is fixed at construction.
+        public void ReloadGuns()
+        {
+            bool was = Feeding;
+            Stop();
+            lock (_guns)
+            {
+                _guns.Clear();
+                _latest.Clear();
+                _pendingCal.Clear();
+                _calProblem.Clear();
+            }
+            if (was) Start();
+            else GunsChanged?.Invoke();
+        }
+
+        // Fullscreen gallery straight into Box Cal, locked to one gun.
+        public bool OpenBoxCal(string sn)
+        {
+            GunState g;
+            lock (_guns)
+                if (!_guns.TryGetValue(sn, out g)) return false;
+            if (!OpenGallery()) return false;
+            _gallery.BeginBoxCal(g);
+            return true;
+        }
+
         public void Recalibrate(string sn)
         {
             if (!Feeding || _calib != null) return;
@@ -174,6 +215,7 @@ namespace GaimeTray
                     BtnCoin = g.BtnCoin,
                     BtnStart = g.BtnStart,
                     Calibrated = g.Calib != null,
+                    CalProblem = _calProblem.TryGetValue(g.Serial, out var cp) ? cp : null,
                     AgeMs = (now - g.LastReport).TotalMilliseconds,
                     RateHz = g.LastIntervalMs > 0 ? 1000.0 / g.LastIntervalMs : 0,
                 }).ToList();
@@ -188,8 +230,9 @@ namespace GaimeTray
             _guns[sn] = new GunState(sn, n, "Gun " + n + " (sn" + sn + ")");
             _latest[sn] = (5000, 5000);
             var c = RectCalib.Load(sn);
-            if (c == null) _pendingCal.Enqueue(sn);
+            if (c == null) { if (AutoCalibrate) _pendingCal.Enqueue(sn); }
             else _guns[sn].Calib = c;
+            _calProblem[sn] = CalStatus.GridProblem(sn, c);
             if (!silent)
             {
                 Emit("Hot-plug: attached " + _guns[sn].Label +
@@ -226,8 +269,10 @@ namespace GaimeTray
                 if (_calib.DialogResult == DialogResult.OK && _calib.Result != null
                     && _calib.Result.IsValid)
                 {
+                    _calib.Result.FitInfo = _calib.FitInfo;
                     _calib.Result.Save(target);
                     if (_guns.TryGetValue(target, out var g)) g.Calib = _calib.Result;
+                    _calProblem[target] = CalStatus.GridProblem(target, _calib.Result);
                     Emit(_guns[target].Label + ": calibrated (" + _calib.FitInfo + ").");
                 }
                 else if (_calib.DialogResult == DialogResult.OK)

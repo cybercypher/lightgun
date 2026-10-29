@@ -63,7 +63,19 @@ namespace GaimeFeeder
         // Absolute reports own the shared Windows cursor, so the bridge only
         // streams while a game process is in the foreground. On the desktop the
         // Pico stays silent and the real mouse is free.
-        static readonly HashSet<string> _games = LoadGames();
+        // Built-in list; bridge-processes.txt replaces it. Declared before
+        // _games: static initializers run in textual order.
+        public static readonly string[] DefaultGames =
+        {
+            "DemulShooter", "DemulShooterX64", "TeknoParrot",
+            "EMULATOR", "emulator_multicpu",
+            "BudgieLoader", "game",
+            "pcsx2", "pcsx2x6", "rpcs3", "Dolphin", "PPSSPP",
+            "retroarch", "mame", "flycast", "supermodel",
+            "BigPEmu", "demul", "Fusion", "gens",
+        };
+
+        static volatile HashSet<string> _games = LoadGames();
         static readonly int _pulsePeriodMs = LoadPulsePeriod();
         static int _pulseTick;
 
@@ -226,6 +238,22 @@ namespace GaimeFeeder
             return true;
         }
 
+        // The COM name Windows assigned to the bridge's CDC function, or null.
+        // Registry only: it stays set after the bridge is unplugged.
+        public static string BridgePort() => FindPort();
+
+        // Game process names that unlock the stream, as currently loaded.
+        public static List<string> Games()
+        {
+            var list = new List<string>(_games);
+            list.Sort(StringComparer.OrdinalIgnoreCase);
+            return list;
+        }
+
+        // Re-read bridge-processes.txt after the setup wizard edits it. The
+        // feed thread only reads the reference, so swapping it is enough.
+        public static void ReloadGames() => _games = LoadGames();
+
         // The bridge's CDC function is USB\VID_1209&PID_0A11&MI_02; Windows
         // stores the assigned COM name under the instance's Device Parameters.
         static string FindPort()
@@ -308,16 +336,7 @@ namespace GaimeFeeder
         // the built-in list.
         static HashSet<string> LoadGames()
         {
-            var defaults = new[]
-            {
-                "DemulShooter", "DemulShooterX64", "TeknoParrot",
-                "EMULATOR", "emulator_multicpu",
-                "BudgieLoader", "game",
-                "pcsx2", "pcsx2x6", "rpcs3", "Dolphin", "PPSSPP",
-                "retroarch", "mame", "flycast", "supermodel",
-                "BigPEmu", "demul", "Fusion", "gens",
-            };
-            var set = new HashSet<string>(defaults, StringComparer.OrdinalIgnoreCase);
+            var set = new HashSet<string>(DefaultGames, StringComparer.OrdinalIgnoreCase);
             try
             {
                 var path = AppPaths.BridgeProcesses;

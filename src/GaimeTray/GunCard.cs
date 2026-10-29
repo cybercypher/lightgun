@@ -92,8 +92,10 @@ namespace GaimeTray
             bool live = g.AgeMs < 3000;
             _status.Text = live ? "● LIVE" : "○ QUIET";
             _status.ForeColor = live ? Lime : Dim;
-            _cal.Text = g.Calibrated ? "calibrated" : "NOT calibrated — press Calibrate";
-            _cal.ForeColor = g.Calibrated ? Dim : Red;
+            bool stale = g.Calibrated && g.CalProblem != null;
+            _cal.Text = !g.Calibrated ? "NOT calibrated — press Calibrate"
+                : stale ? g.CalProblem + " — press Calibrate" : "calibrated";
+            _cal.ForeColor = g.Calibrated && !stale ? Dim : Red;
             _pos.Text = "X " + g.RawX.ToString().PadLeft(5) + "  Y " + g.RawY.ToString().PadLeft(5);
             _rate.Text = g.RateHz.ToString("F0").PadLeft(4) + " Hz";
             Lit(_trig, g.TriggerDown, true);

@@ -5,7 +5,6 @@ using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using GaimeFeeder;
 
 namespace GaimeTray
@@ -79,9 +78,9 @@ namespace GaimeTray
             {
                 Text = "Start with Windows", Location = new Point(462, 16),
                 AutoSize = true, ForeColor = Dim, BackColor = Panel,
-                Checked = IsAutostart(),
+                Checked = Autostart.IsOn(),
             };
-            _autostart.CheckedChanged += (s, e) => SetAutostart(_autostart.Checked);
+            _autostart.CheckedChanged += (s, e) => Autostart.Set(_autostart.Checked);
             var trayNote = new Label
             {
                 Text = "closes to tray · F12 recalibrates",
@@ -149,7 +148,11 @@ namespace GaimeTray
             };
             new ToolTip().SetToolTip(snBtn,
                 "Write a gun's on-device serial: plug in ONE gun, type 11111 or 22222, Write, replug");
-            bar.Controls.AddRange(new Control[] { clear, folder, snBtn });
+            var setupBtn = MkBtn("Setup wizard", 480, 4);
+            setupBtn.Click += (s, e) => SetupWizard.Open(_eng);
+            new ToolTip().SetToolTip(setupBtn,
+                "Step-by-step: system check, gun serials and players, calibration order, game bindings");
+            bar.Controls.AddRange(new Control[] { clear, folder, snBtn, setupBtn });
             p.Controls.AddRange(new Control[] { _log, bar });
             return p;
         }
@@ -296,40 +299,6 @@ namespace GaimeTray
         {
             Directory.CreateDirectory(AppPaths.Logs);
             return AppPaths.Logs;
-        }
-
-        static bool IsAutostart()
-        {
-            try
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", false))
-                    return k?.GetValue("GaimeTray") != null;
-            }
-            catch { return false; }
-        }
-
-        static void SetAutostart(bool on)
-        {
-            try
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-                {
-                    if (k == null) return;
-                    if (on)
-                    {
-                        // Point at the windowed apphost exe, NOT dotnet.exe:
-                        // dotnet <dll> opens a console window.
-                        string exe = Environment.ProcessPath;
-                        if (exe.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                            exe = Path.ChangeExtension(exe, ".exe");
-                        k.SetValue("GaimeTray", "\"" + exe + "\"");
-                    }
-                    else k.DeleteValue("GaimeTray", false);
-                }
-            }
-            catch { }
         }
     }
 }

@@ -68,6 +68,8 @@ namespace GaimeTray
         // the period that just ended instead of leaving it on screen to be
         // forgotten.
         public static Action<string> Log;
+        // Raised after a Box Cal reached the gun (serial).
+        public static Action<string> BoxCalSent;
         Target _target;
         bool _live;
         bool _measure;
@@ -104,7 +106,14 @@ namespace GaimeTray
                      ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint, true);
             _tick.Tick += (s, e) => Tick();
-            Shown += (s, e) => { SpawnTarget(); _tick.Start(); Activate(); };
+            Shown += (s, e) =>
+            {
+                _shown = true;
+                SpawnTarget();
+                _tick.Start();
+                Activate();
+                if (_pendingBox != null) { EnterBoxCal(_pendingBox); _pendingBox = null; }
+            };
             FormClosed += (s, e) => { _tick.Stop(); LogNoise("closed"); };
         }
 
@@ -189,6 +198,17 @@ namespace GaimeTray
                 (now - last).TotalMilliseconds < 250) return false;
             _lastAction[vkey] = now;
             return true;
+        }
+
+        // Open straight into Box Cal for one gun (setup wizard). Before Shown,
+        // SpawnTarget would undo it, so it waits for Shown.
+        bool _shown;
+        GunState _pendingBox;
+
+        public void BeginBoxCal(GunState g)
+        {
+            if (_shown) EnterBoxCal(g);
+            else _pendingBox = g;
         }
 
         void EnterBoxCal(GunState g)
@@ -288,6 +308,8 @@ namespace GaimeTray
                 return;
             }
             foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
+            CalStatus.MarkBoxCal(serial, headroom, ClientSize.Width, ClientSize.Height);
+            try { BoxCalSent?.Invoke(serial); } catch { }
             Log?.Invoke("gallery [boxcal]: " + label + " sent 8 reports (headroom " +
                 headroom + "%). Run the host calibration again for this gun.");
             ExitBoxCal();

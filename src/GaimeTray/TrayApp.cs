@@ -27,6 +27,7 @@ namespace GaimeTray
             _tray.DoubleClick += (s, e) => ToggleWindow();
             var menu = new ContextMenuStrip();
             menu.Items.Add("Show", null, (s, e) => ShowWindow());
+            menu.Items.Add("Setup…", null, (s, e) => SetupWizard.Open(_eng));
             menu.Items.Add("Recalibrate Gun 1", null, (s, e) => Recal(1));
             menu.Items.Add("Recalibrate Gun 2", null, (s, e) => Recal(2));
             menu.Items.Add(new ToolStripSeparator());
@@ -37,7 +38,12 @@ namespace GaimeTray
                 try { _tray.ShowBalloonTip(3000, t, x, ToolTipIcon.Info); } catch { }
             };
             ShowWindow();
+            // First run: the wizard owns calibration order (Box Cal before the
+            // host grid), so attaching must not pop the grid on its own.
+            bool firstRun = SetupWizard.FirstRun;
+            if (firstRun) _eng.AutoCalibrate = false;
             _eng.Start();
+            if (firstRun) SetupWizard.Open(_eng);
             // `--test` opens the gallery straight away (shortcut / verification).
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "--test", StringComparison.OrdinalIgnoreCase))

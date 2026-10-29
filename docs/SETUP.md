@@ -47,6 +47,26 @@ Unzip `GaimeTray-win-x64.zip` anywhere, for example `C:\games\feeder`, and run
 That maps a gun's **on-device serial** to a player number. If your guns do not
 report `11111` / `22222` yet, do step 3 first, then fix this file.
 
+### The setup wizard
+
+On the first start (no `setup.json` next to the exe yet) the tray opens a
+step-by-step wizard. It walks steps 3–7 below in the right order, so you can
+follow it instead of this page. Reopen it any time from the tray menu
+(**Setup…**) or the Log tab (**Setup wizard**).
+
+| Page | What it does |
+|---|---|
+| System check | display scaling 100 %, both bridge mice, the bridge COM port, guns connected; **Flash bridge…** copies `gun_bridge.uf2` to a Pico held in BOOTSEL |
+| Guns | lists the connected guns by serial, flags guns that share a serial, **Write serial…** (one gun at a time, §3), assigns Player 1 / 2 and saves `guns.json` |
+| Calibrate | per gun: **1 · Box Cal → 2 · Host grid → 3 · Test**, with the time of each and a warning when the host grid is older than the last Box Cal or was made at another resolution |
+| Games | DemulShooter folder + **Bind to bridge** (same rewrite as `fix_demulshooter_paths.ps1`); TeknoParrot folder + which profiles have both guns bound (read-only); the list of game processes that turn the bridge on (`bridge-processes.txt`) |
+| Finish | summary, start with Windows |
+
+While the wizard is open, a gun without a host calibration does not pop the
+calibration screen by itself — the Calibrate page runs it after Box Cal. The
+PC records each Box Cal it sends in `calibrations/boxcal_<serial>.json`; the
+main window's gun card shows the same "redo the host grid" warning.
+
 ## 3. Give each gun its serial
 
 The tray identifies a gun by the serial stored inside the gun (not the USB
@@ -206,7 +226,9 @@ Logs: `logs\tray-<date>.log` (guns, calibration, shots, noise),
 ```
 GaimeTray.exe            tray app (this is the only program to run)
 guns.json                serial -> player 1/2
-calibrations/            cal_<serial>.json, the PC-side calibration
+setup.json               setup wizard: TeknoParrot / DemulShooter folders, finished flag
+calibrations/            cal_<serial>.json, the PC-side calibration;
+                         boxcal_<serial>.json, when this PC last sent a Box Cal
 logs/                    tray-<date>.log, bridge-<date>.log
 latch-ms.txt             optional: press-latch before the trigger, ms (absent = 0)
 boxcal-headroom.txt      optional: Box Cal headroom percent (absent = 0)
