@@ -13,6 +13,8 @@ namespace GaimeFeeder
         public string TeknoParrotDir { get; set; } = "";
         public string DemulShooterDir { get; set; } = "";
         public bool Completed { get; set; }
+        // White reference border on (tray screens + ReShade in games).
+        public bool BorderOn { get; set; } = true;
 
         public static string FilePath => Path.Combine(AppPaths.Root, "setup.json");
 

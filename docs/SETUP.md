@@ -100,6 +100,15 @@ and the aim drifts.
 The white reference border (32 px) is on by default in both screens. Leave it
 alone during calibration — it is part of the reference.
 
+The border is one setting (wizard → Calibrate, **Turn border off/on**; the
+Games page button is the same switch). It covers the tray screens and the
+ReShade border in games together, and is kept in `setup.json`. Every Box Cal
+and host grid records the border state it was made under; after a change the
+Calibrate page and the gun card mark each gun **full recalibration** until it
+has a new Box Cal and grid. Box Cal and the grid always start with the
+configured border, and a **V** / **B** test toggle ends when the gallery or the
+grid closes. If the border was toggled during a run, that run is flagged.
+
 ### 4a. Gun-side: Box Cal (once per gun, redo whenever you like)
 
 1. Tray → **Test** (or Ctrl+T) opens the fullscreen gallery.
@@ -144,6 +153,7 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 | Event | What to redo |
 |---|---|
 | You ran Box Cal | the PC-side grid for that gun (4b) |
+| White border turned on or off | **both** steps for **every** gun: Box Cal (4a), then the grid (4b) — the gun's camera sees the border |
 | Gun dropped / mount knocked / new player stance | the PC-side grid (4b) |
 | Screen resolution or Windows scaling changed | reboot-level: fix scaling to 100 %, then 4b for both |
 | New gun or a gun with a wiped serial | write the serial (step 3), then 4a, then 4b |

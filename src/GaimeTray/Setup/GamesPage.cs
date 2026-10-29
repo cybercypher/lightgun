@@ -71,12 +71,14 @@ namespace GaimeTray
             _borderToggle = Ui.Btn("Turn off", 386, y + 22, 114);
             _borderToggle.Click += (s, e) =>
             {
-                bool on = ReshadeBorder.Get(_tpDir.Text.Trim()) != ReshadeBorder.State.On;
-                Border(() => ReshadeBorder.SetEnabled(_tpDir.Text.Trim(), on));
+                // Same switch as the Calibrate page: the game border and the
+                // calibration screens must agree, and changing it means a
+                // full recalibration.
+                if (Wizard.SetBorder(!ScreenBorder.Mode)) Refresh_();
             };
             var borderRemove = Ui.Btn("Remove", 508, y + 22, 130);
             borderRemove.Click += (s, e) => Border(() => ReshadeBorder.Uninstall(_tpDir.Text.Trim()));
-            new ToolTip().SetToolTip(_borderToggle, "Swap the border in or out without reinstalling; takes effect at the next game launch");
+            new ToolTip().SetToolTip(_borderToggle, "The white border setting (games + calibration screens). Changing it needs a full recalibration; games pick it up at the next launch");
             new ToolTip().SetToolTip(borderRemove, "Take everything out and put back the original opengl32.dll if there was one");
             Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove });
 
@@ -169,8 +171,12 @@ namespace GaimeTray
                 State(_borderState, st == ReshadeBorder.State.On ? Check.Ok
                     : st == ReshadeBorder.State.Off || st == ReshadeBorder.State.NotInstalled ? Check.Info : Check.Warn,
                     ReshadeBorder.Describe(st));
-                _borderToggle.Enabled = st == ReshadeBorder.State.On || st == ReshadeBorder.State.Off;
-                _borderToggle.Text = st == ReshadeBorder.State.Off ? "Turn on" : "Turn off";
+                _borderToggle.Enabled = true;
+                _borderToggle.Text = ScreenBorder.Mode ? "Turn off" : "Turn on";
+                // Files changed by hand (or before the setting existed).
+                if ((st == ReshadeBorder.State.On && !ScreenBorder.Mode) || (st == ReshadeBorder.State.Off && ScreenBorder.Mode))
+                    State(_borderState, Check.Warn, ReshadeBorder.Describe(st) + " — but the border setting is " +
+                        (ScreenBorder.Mode ? "ON" : "OFF") + "; Install again to match");
             }
             try { cfg.Save(); } catch { }
         }
@@ -192,7 +198,9 @@ namespace GaimeTray
                     dll = dlg.FileName;
                 }
             }
-            Border(() => ReshadeBorder.Install(tp, dll));
+            // A fresh install is on; follow the border setting if it is off.
+            Border(() => ReshadeBorder.Install(tp, dll) +
+                (ScreenBorder.Mode ? "" : "; " + ReshadeBorder.SetEnabled(tp, false)));
         }
 
         void Border(Func<string> action)

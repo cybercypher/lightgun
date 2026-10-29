@@ -35,6 +35,9 @@ namespace GaimeFeeder
         public CalibrationWindow(string display, Func<(int x, int y)> latestRaw)
         {
             _display = display; _latestRaw = latestRaw;
+            // Always start from the configured border; a test toggle left over
+            // from the gallery must not end up in a calibration.
+            ScreenBorder.Enabled = ScreenBorder.Mode;
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             TopMost = true;

@@ -148,6 +148,14 @@ namespace GaimeTray
             else GunsChanged?.Invoke();
         }
 
+        // The border setting changed: re-check every gun's calibration.
+        public void RefreshCalStatus()
+        {
+            lock (_guns)
+                foreach (var g in _guns.Values) _calProblem[g.Serial] = CalStatus.GridProblem(g.Serial, g.Calib);
+            GunsChanged?.Invoke();
+        }
+
         // Fullscreen gallery straight into Box Cal, locked to one gun.
         public bool OpenBoxCal(string sn)
         {
@@ -270,6 +278,7 @@ namespace GaimeTray
                     && _calib.Result.IsValid)
                 {
                     _calib.Result.FitInfo = _calib.FitInfo;
+                    _calib.Result.Border = ScreenBorder.Enabled;
                     _calib.Result.Save(target);
                     if (_guns.TryGetValue(target, out var g)) g.Calib = _calib.Result;
                     _calProblem[target] = CalStatus.GridProblem(target, _calib.Result);
@@ -280,6 +289,8 @@ namespace GaimeTray
                         "; Calibrate to retry).");
                 else
                     Emit(_guns[target].Label + ": calibration skipped.");
+                // A B test toggle ends with the calibration window.
+                ScreenBorder.Enabled = ScreenBorder.Mode;
                 _calib = null;
                 GunsChanged?.Invoke();
                 CalibrateNext();

@@ -19,8 +19,14 @@ namespace GaimeFeeder
     {
         public const int Pixels = 32;
 
-        // On by default: "always show a white border" is the user's rule, and
-        // the toggles exist only for A/B noise measurements.
+        // The configured border (setup.json BorderOn, default on). Box Cal and
+        // the host grid start from it, every calibration records the state it
+        // was made under, and a calibration made under the other state needs
+        // a full redo (CalStatus). The game's ReShade border follows it.
+        public static bool Mode = true;
+
+        // What is drawn right now. Starts at Mode; the V / B keys flip it for
+        // A/B noise measurements only, and the gallery puts it back on close.
         public static bool Enabled = true;
 
         // Kept taking (w, h) so callers that lay out chrome around the border

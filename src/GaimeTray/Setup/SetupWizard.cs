@@ -142,6 +142,33 @@ namespace GaimeTray
             try { page.ShowPage(); } catch (Exception ex) { Engine.Note("setup: " + page.Title + ": " + ex.Message); }
         }
 
+        // The one border switch: tray screens + the ReShade border in games.
+        // The gun's camera sees the border, so every gun calibrated under the
+        // other state needs Box Cal and the host grid again (CalStatus).
+        public bool SetBorder(bool on)
+        {
+            if (on == ScreenBorder.Mode) return true;
+            var answer = MessageBox.Show(this,
+                "Turn the white border " + (on ? "ON" : "OFF") + "?\r\n\r\n" +
+                "The gun's camera uses the border, so every gun will need a full recalibration " +
+                "(Box Cal, then the host grid) before it aims right again.",
+                "White border", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+            if (answer != DialogResult.OK) return false;
+            ScreenBorder.Mode = ScreenBorder.Enabled = on;
+            Config.BorderOn = on;
+            try { Config.Save(); } catch { }
+            string game = "";
+            var st = ReshadeBorder.Get(Config.TeknoParrotDir);
+            if (st == ReshadeBorder.State.On || st == ReshadeBorder.State.Off)
+            {
+                try { ReshadeBorder.SetEnabled(Config.TeknoParrotDir, on); game = ", game border " + (on ? "on" : "off"); }
+                catch (Exception ex) { game = ", game border NOT switched: " + ex.Message; }
+            }
+            Engine.Note("setup: white border " + (on ? "ON" : "OFF") + game + " — all guns need Box Cal + host grid");
+            Engine.RefreshCalStatus();
+            return true;
+        }
+
         void Finish()
         {
             Config.Completed = true;

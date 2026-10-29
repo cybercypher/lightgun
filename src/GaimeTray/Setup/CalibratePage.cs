@@ -21,7 +21,8 @@ namespace GaimeTray
         }
 
         readonly Panel _list;
-        readonly Label _empty;
+        readonly Label _empty, _border;
+        readonly Button _borderBtn;
         readonly List<Row> _rows = new List<Row>();
         string _shape = "";
 
@@ -32,9 +33,12 @@ namespace GaimeTray
                 "2 · Host grid: 9 targets, 3 pulls each, standing where you will play. 3 · Test: shoot 20–40 shots; " +
                 "the log shows the miss, under ~60 px at 4K is good. A Box Cal always needs a new host grid after it.",
                 0, 0, 650, 72, Ui.Dim));
-            _list = new Panel { Location = new Point(0, 80), Size = new Size(650, 330), BackColor = Ui.Bg };
-            _empty = Ui.Text("", 0, 80, 650, 40, Ui.Amber);
-            Controls.AddRange(new Control[] { _list, _empty });
+            _border = Ui.Text("", 0, 84, 500, 24, null, 9, true);
+            _borderBtn = Ui.Btn("", 508, 78, 130);
+            _borderBtn.Click += (s, e) => { Wizard.SetBorder(!ScreenBorder.Mode); Tick(); };
+            _list = new Panel { Location = new Point(0, 120), Size = new Size(650, 330), BackColor = Ui.Bg };
+            _empty = Ui.Text("", 0, 120, 650, 40, Ui.Amber);
+            Controls.AddRange(new Control[] { _border, _borderBtn, _list, _empty });
         }
 
         public override void ShowPage() => Tick();
@@ -42,6 +46,10 @@ namespace GaimeTray
         public override void Tick()
         {
             var eng = Wizard.Engine;
+            _border.Text = "White border: " + (ScreenBorder.Mode ? "ON" : "OFF") +
+                "  ·  changing it needs a full recalibration of every gun";
+            _border.ForeColor = ScreenBorder.Mode ? Ui.Lime : Ui.Amber;
+            _borderBtn.Text = ScreenBorder.Mode ? "Turn border off" : "Turn border on";
             if (!eng.Feeding)
             {
                 _empty.Text = "The tray is stopped. Press Start in the main window; calibration reads the guns through it.";
@@ -75,9 +83,12 @@ namespace GaimeTray
                     : Ui.When(CalStatus.GridUtc(g.Serial, cal)) +
                       (string.IsNullOrEmpty(cal.FitInfo) ? "" : "  ·  " + cal.FitInfo));
                 string problem = CalStatus.GridProblem(g.Serial, cal);
-                if (cal == null && !box.HasValue) Set(r.State, Check.Fail, "next: Box Cal");
+                string boxProblem = CalStatus.BoxCalProblem(g.Serial);
+                if (boxProblem != null) Set(r.State, Check.Fail, "full recalibration: " + boxProblem + " — next: Box Cal");
+                else if (cal == null && !box.HasValue) Set(r.State, Check.Fail, "next: Box Cal");
                 else if (cal == null) Set(r.State, Check.Fail, "next: host grid");
-                else if (problem != null) Set(r.State, Check.Warn, problem + " — redo the host grid");
+                else if (problem != null)
+                    Set(r.State, Check.Warn, problem.Contains("redo") ? problem : problem + " — redo the host grid");
                 else if (!box.HasValue) Set(r.State, Check.Ok, "calibrated (Box Cal done before this PC kept track)");
                 else Set(r.State, Check.Ok, "ready — test it");
             }

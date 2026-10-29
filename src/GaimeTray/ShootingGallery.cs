@@ -114,7 +114,13 @@ namespace GaimeTray
                 Activate();
                 if (_pendingBox != null) { EnterBoxCal(_pendingBox); _pendingBox = null; }
             };
-            FormClosed += (s, e) => { _tick.Stop(); LogNoise("closed"); };
+            FormClosed += (s, e) =>
+            {
+                _tick.Stop();
+                LogNoise("closed");
+                // A V test toggle ends with the gallery.
+                ScreenBorder.Enabled = ScreenBorder.Mode;
+            };
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -214,6 +220,13 @@ namespace GaimeTray
         void EnterBoxCal(GunState g)
         {
             if (_measure) { LogNoise("measure end"); _measure = false; }
+            // Box Cal always runs under the configured border; MarkBoxCal
+            // records what was actually on screen when it finished.
+            if (ScreenBorder.Enabled != ScreenBorder.Mode)
+            {
+                ScreenBorder.Enabled = ScreenBorder.Mode;
+                Log?.Invoke("gallery [boxcal]: border back " + (ScreenBorder.Mode ? "ON" : "OFF") + " (configured)");
+            }
             _boxCal = true;
             _boxSerial = g?.Serial;
             _boxLabel = g?.Label;
@@ -308,7 +321,7 @@ namespace GaimeTray
                 return;
             }
             foreach (var v in _vis.Values) { v.Quiet.Clear(); v.ReportN = 0; }
-            CalStatus.MarkBoxCal(serial, headroom, ClientSize.Width, ClientSize.Height);
+            CalStatus.MarkBoxCal(serial, headroom, ClientSize.Width, ClientSize.Height, ScreenBorder.Enabled);
             try { BoxCalSent?.Invoke(serial); } catch { }
             Log?.Invoke("gallery [boxcal]: " + label + " sent 8 reports (headroom " +
                 headroom + "%). Run the host calibration again for this gun.");

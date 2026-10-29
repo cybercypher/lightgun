@@ -21,6 +21,9 @@ namespace GaimeFeeder
         // Absent in files written before these existed.
         public DateTime? SavedUtc { get; set; }
         public string FitInfo { get; set; }
+        // Border drawn while the grid was taken; null in older files (made
+        // with the border on, the default since 2026-10-24).
+        public bool? Border { get; set; }
 
         public (double sx, double sy, bool inside) Map(int rawX, int rawY)
         {

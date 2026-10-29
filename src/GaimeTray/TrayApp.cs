@@ -41,6 +41,7 @@ namespace GaimeTray
             // First run: the wizard owns calibration order (Box Cal before the
             // host grid), so attaching must not pop the grid on its own.
             bool firstRun = SetupWizard.FirstRun;
+            ScreenBorder.Mode = ScreenBorder.Enabled = SetupConfig.Load().BorderOn;
             if (firstRun) _eng.AutoCalibrate = false;
             _eng.Start();
             if (firstRun) SetupWizard.Open(_eng);

@@ -19,6 +19,7 @@ namespace GaimeFeeder
             public int HeadroomPercent { get; set; }
             public int ScreenW { get; set; }
             public int ScreenH { get; set; }
+            public bool? Border { get; set; }
         }
 
         static string MarkerPath(string sn)
@@ -27,30 +28,47 @@ namespace GaimeFeeder
             return Path.Combine(AppPaths.Calibrations, "boxcal_" + sn + ".json");
         }
 
-        public static void MarkBoxCal(string sn, int headroom, int w, int h)
+        public static void MarkBoxCal(string sn, int headroom, int w, int h, bool border)
         {
             try
             {
                 File.WriteAllText(MarkerPath(sn), JsonSerializer.Serialize(new BoxCalMarker
                 {
                     SentUtc = DateTime.UtcNow, HeadroomPercent = headroom, ScreenW = w, ScreenH = h,
+                    Border = border,
                 }, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch { }
         }
 
-        // Null when this PC never sent a Box Cal to the gun (it may still have
-        // one from before the marker existed).
-        public static DateTime? BoxCalUtc(string sn)
+        static BoxCalMarker Marker(string sn)
         {
             try
             {
                 var p = MarkerPath(sn);
-                if (!File.Exists(p)) return null;
-                return JsonSerializer.Deserialize<BoxCalMarker>(File.ReadAllText(p))?.SentUtc;
+                return File.Exists(p) ? JsonSerializer.Deserialize<BoxCalMarker>(File.ReadAllText(p)) : null;
             }
             catch { return null; }
         }
+
+        static string OnOff(bool b) => b ? "on" : "off";
+
+        // The border changes what the gun's camera sees, so a Box Cal made
+        // under the other border state is wrong for the gun itself, not just
+        // for the host grid. Null when it matches. A Box Cal this PC did not
+        // record (or recorded before the field existed) was made with the
+        // border on: it was the only state until the setting existed.
+        public static string BoxCalProblem(string sn)
+        {
+            bool made = Marker(sn)?.Border ?? true;
+            return made != ScreenBorder.Mode
+                ? "Box Cal was made with the border " + OnOff(made) + ", it is now " + OnOff(ScreenBorder.Mode)
+                : null;
+        }
+
+        // Null when this PC never sent a Box Cal to the gun (it may still have
+        // one from before the marker existed).
+        public static DateTime? BoxCalUtc(string sn) => Marker(sn)?.SentUtc;
 
         public static DateTime? GridUtc(string sn, RectCalib cal)
         {
@@ -64,6 +82,12 @@ namespace GaimeFeeder
         public static string GridProblem(string sn, RectCalib cal)
         {
             if (cal == null) return "no host calibration";
+            var boxProblem = BoxCalProblem(sn);
+            if (boxProblem != null) return boxProblem + " — redo Box Cal, then the host grid";
+            // Box Cal matches the border here, so only the grid is off (e.g. a
+            // B toggle during the grid).
+            if ((cal.Border ?? true) != ScreenBorder.Mode)
+                return "host grid was made with the border " + OnOff(cal.Border ?? true) + " — redo the host grid";
             var box = BoxCalUtc(sn);
             var grid = GridUtc(sn, cal);
             if (box.HasValue && (!grid.HasValue || box.Value > grid.Value))
