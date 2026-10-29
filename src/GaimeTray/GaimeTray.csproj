@@ -31,4 +31,9 @@
     <Compile Include="..\GaimeFeeder\CalStatus.cs" Link="Engine\CalStatus.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- White border shader + preset for the setup wizard's ReShade install. -->
+    <Content Include="..\..\tools\reshade\*" Link="reshade\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

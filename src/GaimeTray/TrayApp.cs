@@ -44,6 +44,13 @@ namespace GaimeTray
             if (firstRun) _eng.AutoCalibrate = false;
             _eng.Start();
             if (firstRun) SetupWizard.Open(_eng);
+            else
+                try
+                {
+                    var line = DemulShooterBinding.KeepBound(SetupConfig.Load().DemulShooterDir, BridgeDevices.Mice());
+                    if (line != null) _eng.Note(line);
+                }
+                catch (Exception ex) { _eng.Note("DemulShooter re-bind skipped: " + ex.Message); }
             // `--test` opens the gallery straight away (shortcut / verification).
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "--test", StringComparison.OrdinalIgnoreCase))

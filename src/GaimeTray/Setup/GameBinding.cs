@@ -38,6 +38,19 @@ namespace GaimeTray
         public static bool Bound(string value, int iface) =>
             value != null && value.IndexOf("VID_1209&PID_0A11&MI_0" + iface, StringComparison.OrdinalIgnoreCase) >= 0;
 
+        // Tray start: once a DemulShooter folder is set in the wizard, keep its
+        // config.ini on the current bridge paths, so DS never needs a launcher
+        // script. Skipped while DS runs (it would not see the change) or when
+        // the bridge is not enumerated yet. Returns a log line, or null.
+        public static string KeepBound(string dsDir, Dictionary<int, string> mice)
+        {
+            string ini = ConfigPath(dsDir);
+            if (ini == null || !File.Exists(ini) || !mice.ContainsKey(0) || Running()) return null;
+            var (p1, p2) = Current(ini);
+            bool same = p1 == mice[0] && (!mice.ContainsKey(1) || p2 == mice[1]);
+            return same ? null : "DemulShooter re-bound to the bridge: " + Bind(ini, mice);
+        }
+
         // Returns a one-line report; throws on anything that stops the write.
         public static string Bind(string config, Dictionary<int, string> mice)
         {

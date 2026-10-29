@@ -15,7 +15,7 @@ namespace GaimeTray
         public override string Title => "Games";
 
         readonly TextBox _tpDir, _dsDir, _games;
-        readonly Label _dsState, _tpState, _gamesState;
+        readonly Label _dsState, _tpState, _gamesState, _borderState;
         readonly ListView _profiles;
 
         public GamesPage(SetupWizard w) : base(w)
@@ -59,8 +59,18 @@ namespace GaimeTray
             _profiles.Columns.Add("P2 gun", 130);
             Controls.AddRange(new Control[] { _tpDir, tpBrowse, tpFind, _tpState, tpOpen, _profiles });
 
+            // ---- white border (ReShade) for ElfLdr2 games
+            y += 216;
+            Controls.Add(Ui.Text("White border in ElfLdr2 games (ReShade)", 0, y, 400, 22, null, 10, true));
+            _borderState = Ui.Text("", 0, y + 26, 360, 36, Ui.Dim);
+            var borderOn = Ui.Btn("Install border", 370, y + 22, 130);
+            borderOn.Click += (s, e) => InstallBorder();
+            var borderOff = Ui.Btn("Remove", 508, y + 22, 130);
+            borderOff.Click += (s, e) => Border(() => ReshadeBorder.Uninstall(_tpDir.Text.Trim()));
+            Controls.AddRange(new Control[] { _borderState, borderOn, borderOff });
+
             // ---- bridge game list
-            y += 220;
+            y += 72;
             Controls.Add(Ui.Text("Games that turn the bridge on", 0, y, 400, 22, null, 10, true));
             Controls.Add(Ui.Text(
                 "The bridge only moves the cursor while one of these processes is in the foreground. One exe name per line.",
@@ -140,7 +150,44 @@ namespace GaimeTray
                     list.Count == 0 ? "no game profiles yet — add a game in TeknoParrot first"
                     : full + " of " + list.Count + " profiles bound for two guns. Bind in UserProfiles\\<Game>.xml with TP closed (SETUP.md §5).");
             }
+            if (cfg.TeknoParrotDir.Length == 0) State(_borderState, Check.Info, "set the TeknoParrot folder first");
+            else
+            {
+                string st = ReshadeBorder.Status(cfg.TeknoParrotDir);
+                State(_borderState, st == "installed" ? Check.Ok : st == "not installed" ? Check.Info : Check.Warn, st);
+            }
             try { cfg.Save(); } catch { }
+        }
+
+        void InstallBorder()
+        {
+            string tp = _tpDir.Text.Trim();
+            string dll = ReshadeBorder.FindDll(tp);
+            if (dll == null)
+            {
+                using (var dlg = new OpenFileDialog
+                {
+                    Filter = "ReShade 32-bit DLL (*.dll)|*.dll",
+                    Title = "Pick a 32-bit ReShade DLL (ReShade32.dll from the ReShade installer)",
+                })
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    dll = dlg.FileName;
+                }
+            }
+            Border(() => ReshadeBorder.Install(tp, dll));
+        }
+
+        void Border(Func<string> action)
+        {
+            try
+            {
+                string msg = action();
+                Wizard.Engine.Note("setup: ReShade border " + msg);
+                Refresh_();
+                State(_borderState, Check.Ok, msg);
+            }
+            catch (Exception ex) { State(_borderState, Check.Fail, ex.Message); }
         }
 
         void BindDs()

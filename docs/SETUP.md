@@ -59,7 +59,7 @@ follow it instead of this page. Reopen it any time from the tray menu
 | System check | display scaling 100 %, both bridge mice, the bridge COM port, guns connected; **Flash bridge…** copies `gun_bridge.uf2` to a Pico held in BOOTSEL |
 | Guns | lists the connected guns by serial, flags guns that share a serial, **Write serial…** (one gun at a time, §3), assigns Player 1 / 2 and saves `guns.json` |
 | Calibrate | per gun: **1 · Box Cal → 2 · Host grid → 3 · Test**, with the time of each and a warning when the host grid is older than the last Box Cal or was made at another resolution |
-| Games | DemulShooter folder + **Bind to bridge** (same rewrite as `fix_demulshooter_paths.ps1`); TeknoParrot folder + which profiles have both guns bound (read-only); the list of game processes that turn the bridge on (`bridge-processes.txt`) |
+| Games | DemulShooter folder + **Bind to bridge** (kept bound on every tray start); TeknoParrot folder + which profiles have both guns bound (read-only); the ReShade white border for ElfLdr2 games; the list of game processes that turn the bridge on (`bridge-processes.txt`) |
 | Finish | summary, start with Windows |
 
 While the wizard is open, a gun without a host calibration does not pop the
@@ -71,8 +71,7 @@ main window's gun card shows the same "redo the host grid" warning.
 
 The tray identifies a gun by the serial stored inside the gun (not the USB
 serial, which changes on every replug). The Log tab has a **Write S/N** button
-for exactly this; `tools/gun_set.ps1 -Value 11111` does the same thing from
-PowerShell if you prefer.
+for exactly this (the wizard's Guns page opens the same dialog).
 
 1. Plug in **one** gun. The dialog shows `detected 1 gun, serial …`.
 2. Type `11111`, press **Write**. It prints the ack and the serial it reads
@@ -178,30 +177,27 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 
 ## 6. DemulShooter
 
-DS matches devices by exact RawInput path and only at startup, so bind it with
-the script and start DS **after** the game window is up:
+DS matches devices by exact RawInput path and only at startup. In the wizard's
+Games page, set the DemulShooter folder and press **Bind to bridge**: it rewrites
+the P1/P2 paths in `config.ini` to the bridge mice (with a timestamped backup)
+and DS then shows `G'AIM'E / G'AIM'E Bridge Mouse 1/2`.
 
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File pico\gun_bridge\host\fix_demulshooter_paths.ps1
-```
-
-It rewrites the P1/P2 paths in `config.ini` to the bridge mice and DS then shows
-`G'AIM'E / G'AIM'E Bridge Mouse 1/2`.
+From then on the tray checks `config.ini` every time it starts and re-binds it
+if the bridge paths changed, so there is no launcher to run. Start DS **after**
+the game window is up, as usual.
 
 ## 7. The white border in games (optional but recommended)
 
 Games render at whatever aspect they like; a constant white frame gives you (and
 the gun's optical path) the same reference as the calibration screens. With
-TeknoParrot's ELF loader (Raw Thrills / Linux titles):
-
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\Install-ReshadeBorder.ps1
-```
+TeknoParrot's ELF loader (Raw Thrills / Linux titles), use **Install border**
+on the wizard's Games page. It needs a 32-bit ReShade DLL (`ReShade32.dll` from
+the ReShade installer) and asks for one the first time.
 
 It installs ReShade as an OpenGL proxy next to `ElfLdr2\BudgieLoader.exe` with a
-32 px border that is applied on launch — no Home key, no overlay. It covers every
-ElfLdr2 game. `-Uninstall` removes it; `-BorderPx 24` changes the thickness
-(then change `ScreenBorder.Pixels` in the tray source to match). See
+border of the same thickness as the tray's own (`ScreenBorder.Pixels`, 32 px),
+applied on launch — no Home key, no overlay. It covers every ElfLdr2 game.
+**Remove** takes it out again and leaves nothing behind. See
 `docs/white-border.md`.
 
 ## 8. Troubleshooting
