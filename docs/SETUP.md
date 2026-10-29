@@ -198,13 +198,21 @@ the game window is up, as usual.
 Games render at whatever aspect they like; a constant white frame gives you (and
 the gun's optical path) the same reference as the calibration screens. With
 TeknoParrot's ELF loader (Raw Thrills / Linux titles), use **Install border**
-on the wizard's Games page. It needs a 32-bit ReShade DLL (`ReShade32.dll` from
-the ReShade installer) and asks for one the first time.
+on the wizard's Games page. Download the standard ReShade from reshade.me (not
+the add-on build) and pick the `ReShade_Setup_*.exe` when asked: the wizard
+takes `ReShade32.dll` out of it, so the ReShade installer never has to run.
+A `ReShade32.dll` picked directly works too. ReShade itself is not shipped with
+the tray; reshade.me asks for the binaries not to be redistributed.
 
 It installs ReShade as an OpenGL proxy next to `ElfLdr2\BudgieLoader.exe` with a
 border of the same thickness as the tray's own (`ScreenBorder.Pixels`, 32 px),
 applied on launch — no Home key, no overlay. It covers every ElfLdr2 game.
-**Remove** takes it out again and leaves nothing behind. See
+**Turn off / Turn on** swaps it out and back in without reinstalling (from the
+next game launch): off renames our `opengl32.dll` to `opengl32.dll.gaime-off`,
+so the game uses the normal Windows OpenGL again — stock `ElfLdr2` has no
+`opengl32.dll` of its own. If another `opengl32.dll` was already there, Install
+keeps it as `opengl32.dll.gaime-orig` and it is back in place whenever the border
+is off. **Remove** takes everything out and restores that original. See
 `docs/white-border.md`.
 
 ## 8. Troubleshooting

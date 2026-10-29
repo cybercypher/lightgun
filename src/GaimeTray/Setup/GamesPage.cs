@@ -17,6 +17,7 @@ namespace GaimeTray
         readonly TextBox _tpDir, _dsDir, _games;
         readonly Label _dsState, _tpState, _gamesState, _borderState;
         readonly ListView _profiles;
+        readonly Button _borderToggle;
 
         public GamesPage(SetupWizard w) : base(w)
         {
@@ -64,12 +65,20 @@ namespace GaimeTray
             // ---- white border (ReShade) for ElfLdr2 games
             y += 216;
             Controls.Add(Ui.Text("White border in ElfLdr2 games (ReShade)", 0, y, 400, 22, null, 10, true));
-            _borderState = Ui.Text("", 0, y + 26, 360, 36, Ui.Dim);
-            var borderOn = Ui.Btn("Install border", 370, y + 22, 130);
-            borderOn.Click += (s, e) => InstallBorder();
-            var borderOff = Ui.Btn("Remove", 508, y + 22, 130);
-            borderOff.Click += (s, e) => Border(() => ReshadeBorder.Uninstall(_tpDir.Text.Trim()));
-            Controls.AddRange(new Control[] { _borderState, borderOn, borderOff });
+            _borderState = Ui.Text("", 0, y + 26, 250, 40, Ui.Dim);
+            var borderInstall = Ui.Btn("Install border", 258, y + 22, 120);
+            borderInstall.Click += (s, e) => InstallBorder();
+            _borderToggle = Ui.Btn("Turn off", 386, y + 22, 114);
+            _borderToggle.Click += (s, e) =>
+            {
+                bool on = ReshadeBorder.Get(_tpDir.Text.Trim()) != ReshadeBorder.State.On;
+                Border(() => ReshadeBorder.SetEnabled(_tpDir.Text.Trim(), on));
+            };
+            var borderRemove = Ui.Btn("Remove", 508, y + 22, 130);
+            borderRemove.Click += (s, e) => Border(() => ReshadeBorder.Uninstall(_tpDir.Text.Trim()));
+            new ToolTip().SetToolTip(_borderToggle, "Swap the border in or out without reinstalling; takes effect at the next game launch");
+            new ToolTip().SetToolTip(borderRemove, "Take everything out and put back the original opengl32.dll if there was one");
+            Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove });
 
             // ---- bridge game list
             y += 72;
@@ -153,11 +162,15 @@ namespace GaimeTray
                     list.Count == 0 ? "no game profiles yet — add a game in TeknoParrot first"
                     : full + " of " + list.Count + " profiles bound for two guns. Select games, then Bind to guns.");
             }
-            if (cfg.TeknoParrotDir.Length == 0) State(_borderState, Check.Info, "set the TeknoParrot folder first");
+            if (cfg.TeknoParrotDir.Length == 0) { State(_borderState, Check.Info, "set the TeknoParrot folder first"); _borderToggle.Enabled = false; }
             else
             {
-                string st = ReshadeBorder.Status(cfg.TeknoParrotDir);
-                State(_borderState, st == "installed" ? Check.Ok : st == "not installed" ? Check.Info : Check.Warn, st);
+                var st = ReshadeBorder.Get(cfg.TeknoParrotDir);
+                State(_borderState, st == ReshadeBorder.State.On ? Check.Ok
+                    : st == ReshadeBorder.State.Off || st == ReshadeBorder.State.NotInstalled ? Check.Info : Check.Warn,
+                    ReshadeBorder.Describe(st));
+                _borderToggle.Enabled = st == ReshadeBorder.State.On || st == ReshadeBorder.State.Off;
+                _borderToggle.Text = st == ReshadeBorder.State.Off ? "Turn on" : "Turn off";
             }
             try { cfg.Save(); } catch { }
         }
@@ -170,8 +183,9 @@ namespace GaimeTray
             {
                 using (var dlg = new OpenFileDialog
                 {
-                    Filter = "ReShade 32-bit DLL (*.dll)|*.dll",
-                    Title = "Pick a 32-bit ReShade DLL (ReShade32.dll from the ReShade installer)",
+                    Filter = "ReShade download (ReShade_Setup_*.exe, ReShade32.dll)|ReShade_Setup*.exe;ReShade32.dll;*.dll|All files|*.*",
+                    Title = "Pick the ReShade_Setup_*.exe downloaded from reshade.me",
+                    InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
                 })
                 {
                     if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -188,7 +202,7 @@ namespace GaimeTray
                 string msg = action();
                 Wizard.Engine.Note("setup: ReShade border " + msg);
                 Refresh_();
-                State(_borderState, Check.Ok, msg);
+                _borderState.Text = Ui.Glyph(Check.Ok) + "  " + msg;
             }
             catch (Exception ex) { State(_borderState, Check.Fail, ex.Message); }
         }
