@@ -3,3 +3,5 @@ build/
 *.elf
 *.bin
 __pycache__/
+# the one firmware image kept in git, for the tray package (see prebuilt/README.md)
+!prebuilt/gun_bridge.uf2

@@ -136,7 +136,8 @@ C:\games\feeder\
   ```
 
   Output: `artifacts\GaimeTray-win-x64\` (one self-contained `GaimeTray.exe`
-  plus `reshade\`, and `gun_bridge.uf2` if `pico/gun_bridge/build` has one) and
+  plus `reshade\` and `gun_bridge.uf2` — a fresh `pico/gun_bridge/build` one if
+  present, else `pico/gun_bridge/prebuilt/gun_bridge.uf2`) and
   `artifacts\GaimeTray-win-x64.zip`. Unzip anywhere and run the exe — no .NET
   install needed; the setup wizard opens on the first start. Updating: unzip
   over the old folder; `guns.json`, `setup.json`, `calibrations\` and `logs\`
