@@ -33,7 +33,18 @@
 
   <ItemGroup>
     <!-- White border shader + preset for the setup wizard's ReShade install. -->
-    <Content Include="..\..\tools\reshade\*" Link="reshade\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Kept as loose files (not inside a single-file exe): the wizard copies them into ElfLdr2. -->
+    <Content Include="..\..\tools\reshade\*" Link="reshade\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- Bridge firmware for the wizard's Flash bridge button, when it has been built. -->
+    <Content Include="..\..\pico\gun_bridge\build\gun_bridge.uf2" Condition="Exists('..\..\pico\gun_bridge\build\gun_bridge.uf2')"
+             Link="gun_bridge.uf2" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
+
+  <!-- Release profile (Properties\PublishProfiles\win-x64.pubxml) zips the publish folder. -->
+  <Target Name="ZipRelease" AfterTargets="Publish" Condition="'$(ZipRelease)' == 'true'">
+    <ZipDirectory SourceDirectory="$(PublishDir)" DestinationFile="$(PublishDir)..\GaimeTray-win-x64.zip" Overwrite="true" />
+    <Message Importance="high" Text="Release zip: $([System.IO.Path]::GetFullPath('$(PublishDir)..\GaimeTray-win-x64.zip'))" />
+  </Target>
 
 </Project>

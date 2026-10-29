@@ -3,6 +3,7 @@
 logs/
 
 # build output
+artifacts/
 src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
 src/GaimeTray/bin/

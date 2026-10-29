@@ -128,10 +128,23 @@ C:\games\feeder\
   holding `guns.json` (`AppPaths.cs`) — so the deployed folder is the root,
   and a dev build under `src\<App>\bin\...\net8.0-windows\` still resolves to
   the repo root.
-- Rebuild + redeploy after source changes: run `tools\Deploy-Feeder.ps1`
-  (`dotnet publish -c Release` of `GaimeTray` into `C:\games\feeder`).
-- Requires the .NET 8 Windows desktop runtime and the Pico bridge
-  (`pico/gun_bridge`, flashed and plugged in).
+- Build a release (needs only the .NET 8 SDK; works on Windows, or on Linux/WSL
+  with `-p:EnableWindowsTargeting=true` added):
+
+  ```
+  dotnet publish src\GaimeTray\GaimeTray.csproj -p:PublishProfile=win-x64
+  ```
+
+  Output: `artifacts\GaimeTray-win-x64\` (one self-contained `GaimeTray.exe`
+  plus `reshade\`, and `gun_bridge.uf2` if `pico/gun_bridge/build` has one) and
+  `artifacts\GaimeTray-win-x64.zip`. Unzip anywhere and run the exe — no .NET
+  install needed; the setup wizard opens on the first start. Updating: unzip
+  over the old folder; `guns.json`, `setup.json`, `calibrations\` and `logs\`
+  are not in the zip, so they are kept.
+- `tools\Deploy-Feeder.ps1` is the older dev loop (framework-dependent publish
+  into `C:\games\feeder`). It copies the repo's `guns.json` and calibrations
+  over the deployed ones, which undoes players/calibrations set in the wizard.
+- Requires the Pico bridge (`pico/gun_bridge`, flashed and plugged in).
 - Recommended one-time setting (no admin) so Windows does not move the cursor
   from the guns' touch digitizers:
   `reg add "HKCU\Software\Microsoft\Wisp\Touch" /v TouchGate /t REG_DWORD /d 0 /f`,
