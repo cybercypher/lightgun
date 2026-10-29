@@ -12,6 +12,7 @@ namespace GaimeTray
     {
         readonly NotifyIcon _tray;
         readonly FeederEngine _eng = new FeederEngine();
+        readonly Kiosk _kiosk;
         MainForm _win;
         bool _exiting;
         bool _told;
@@ -28,6 +29,10 @@ namespace GaimeTray
             var menu = new ContextMenuStrip();
             menu.Items.Add("Show", null, (s, e) => ShowWindow());
             menu.Items.Add("Setup…", null, (s, e) => SetupWizard.Open(_eng));
+            menu.Items.Add("Start game now", null, (s, e) => _kiosk.StartNow());
+            var stopAuto = menu.Items.Add("Stop auto-restart", null, (s, e) => _kiosk.Stop("tray menu", false));
+            menu.Opening += (s, e) => stopAuto.Enabled = _kiosk.Active;
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Recalibrate Gun 1", null, (s, e) => Recal(1));
             menu.Items.Add("Recalibrate Gun 2", null, (s, e) => Recal(2));
             menu.Items.Add(new ToolStripSeparator());
@@ -37,11 +42,22 @@ namespace GaimeTray
             {
                 try { _tray.ShowBalloonTip(3000, t, x, ToolTipIcon.Info); } catch { }
             };
-            ShowWindow();
+            _kiosk = new Kiosk(_eng);
+            _kiosk.Balloon += (t, x) =>
+            {
+                try { _tray.ShowBalloonTip(5000, t, x, ToolTipIcon.Warning); } catch { }
+            };
+            _kiosk.Stopped += () => { if (!_exiting) ShowWindow(); };
             // First run: the wizard owns calibration order (Box Cal before the
             // host grid), so attaching must not pop the grid on its own.
             bool firstRun = SetupWizard.FirstRun;
-            ScreenBorder.Mode = ScreenBorder.Enabled = SetupConfig.Load().BorderOn;
+            var setup = SetupConfig.Load();
+            ScreenBorder.Mode = ScreenBorder.Enabled = setup.BorderOn;
+            // With auto-start the window stays in the tray, so it does not
+            // take the foreground from the game (the bridge streams only to a
+            // foreground game).
+            bool kiosk = !firstRun && setup.AutoLaunch && !string.IsNullOrEmpty(setup.AutoLaunchProfile);
+            if (!kiosk) ShowWindow();
             if (firstRun) _eng.AutoCalibrate = false;
             _eng.Start();
             if (firstRun) SetupWizard.Open(_eng);
@@ -52,11 +68,12 @@ namespace GaimeTray
                     if (line != null) _eng.Note(line);
                 }
                 catch (Exception ex) { _eng.Note("DemulShooter re-bind skipped: " + ex.Message); }
+            if (kiosk) _kiosk.StartIfEnabled();
             // `--test` opens the gallery straight away (shortcut / verification).
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "--test", StringComparison.OrdinalIgnoreCase))
                 {
-                    _win.Hide();
+                    _win?.Hide();
                     _eng.OpenGallery();
                 }
         }
@@ -125,6 +142,8 @@ namespace GaimeTray
         void Exit()
         {
             _exiting = true;
+            // Leave a running game alone; just stop restarting it.
+            try { _kiosk.Stop("tray exit", false); } catch { }
             try { _eng.Stop(); } catch { }
             _tray.Visible = false;
             Application.Exit();

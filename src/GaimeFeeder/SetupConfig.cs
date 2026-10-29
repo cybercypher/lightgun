@@ -16,6 +16,15 @@ namespace GaimeFeeder
         // White reference border on (tray screens + ReShade in games).
         public bool BorderOn { get; set; } = true;
 
+        // Auto-start (wizard Auto-start page, GaimeTray Kiosk): launch this
+        // TeknoParrot profile (UserProfiles file name) when the tray starts,
+        // relaunch it when it exits, until the exit combo stops it.
+        public bool AutoLaunch { get; set; }
+        public string AutoLaunchProfile { get; set; } = "";
+        public bool RestartOnExit { get; set; } = true;
+        // Hold Start + Coin on one gun this long to leave the game.
+        public int ExitComboSeconds { get; set; } = 5;
+
         public static string FilePath => Path.Combine(AppPaths.Root, "setup.json");
 
         public static SetupConfig Load()

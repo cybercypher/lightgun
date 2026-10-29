@@ -225,7 +225,42 @@ keeps it as `opengl32.dll.gaime-orig` and it is back in place whenever the borde
 is off. **Remove** takes everything out and restores that original. See
 `docs/white-border.md`.
 
-## 8. Troubleshooting
+## 8. Auto-start the game (optional)
+
+The wizard's **Auto-start** page turns the PC into a cabinet: after a reboot it
+comes back to the game by itself.
+
+1. Pick the **Game** (a TeknoParrot profile, bound with **Bind to guns**).
+2. Tick **Launch this game when the tray starts** and **Start it again if it
+   closes**.
+3. Tick **Start GaimeTray with Windows**.
+4. Fix the rows under *Coming back after a reboot*:
+   - **Automatic sign-in** — without it a reboot stops at the sign-in screen
+     and nothing starts. **Sign-in settings** opens `netplwiz`: untick *Users
+     must enter a user name and password*. If that box is missing, first turn
+     off *only allow Windows Hello sign-in* in Settings → Accounts → Sign-in
+     options. The wizard never stores your password itself.
+   - **Sleep / screen off** — **Never sleep** sets both to never while plugged
+     in (a sleeping PC drops the guns).
+
+What happens at start: the tray stays in the task tray (its window would take
+the foreground from the game), waits up to 2 minutes for the bridge and the
+guns in `guns.json`, and does not launch while a gun needs calibration or the
+setup wizard is open (a balloon says why). Then it runs
+`TeknoParrotUi.exe --profile=<Game>.xml`, brings the game to the front for its
+first 30 s (the bridge only streams to a foreground game), and watches the game
+process (`BudgieLoader` for ElfLdr2 games). If the game closes, it is started
+again 5 s later; three exits within 2 minutes of their launch in a row stop the
+restarts and show the window instead.
+
+**Leaving the game:** hold **Start + Coin** on either gun for 5 seconds (the
+time is set on the page). The game closes, auto-restart stops for this session
+and the tray window opens. The tray menu has **Stop auto-restart** (leaves the
+game running) and **Start game now**. The next start of the tray resumes
+auto-start. Holding Start + Coin also sends both buttons to the game for those
+seconds.
+
+## 9. Troubleshooting
 
 | Symptom | Cause |
 |---|---|
