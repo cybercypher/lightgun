@@ -470,7 +470,21 @@ namespace GaimeTray
             {
                 var st = Get(t);
                 if (st != State.On && st != State.Off) continue;
-                try { WritePreset(t.Dir, fit); } catch { }
+                try
+                {
+                    // An install from an older tray has the older shader.
+                    var shaders = Path.Combine(t.Dir, "reshade-shaders", "Shaders");
+                    foreach (var f in new[] { "GaimeBorder.fx", "ReShade.fxh" })
+                    {
+                        var src = Path.Combine(Source, f);
+                        var dst = Path.Combine(shaders, f);
+                        if (File.Exists(src) && Directory.Exists(shaders) &&
+                            (!File.Exists(dst) || !File.ReadAllBytes(src).AsSpan().SequenceEqual(File.ReadAllBytes(dst))))
+                            File.Copy(src, dst, true);
+                    }
+                    WritePreset(t.Dir, fit);
+                }
+                catch { }
                 if (st == State.On && fit && t.Process != null) inset.Add(t.Process);
             }
             return inset;
