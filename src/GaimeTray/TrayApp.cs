@@ -68,6 +68,9 @@ namespace GaimeTray
                     if (line != null) _eng.Note(line);
                 }
                 catch (Exception ex) { _eng.Note("DemulShooter re-bind skipped: " + ex.Message); }
+            // Border presets follow the current screen size; tell the bridge
+            // which games draw their picture inside the border.
+            ReshadeBorder.Apply(setup.TeknoParrotDir);
             if (kiosk) _kiosk.StartIfEnabled();
             // `--test` opens the gallery straight away (shortcut / verification).
             foreach (var a in Environment.GetCommandLineArgs())

@@ -17,7 +17,7 @@ namespace GaimeTray
         {
             public string Serial;
             public Label Name, Box, Grid, State;
-            public Button BoxBtn, GridBtn, TestBtn;
+            public Button BoxBtn, GridBtn, TestBtn, AllBtn;
         }
 
         readonly Panel _list;
@@ -119,6 +119,7 @@ namespace GaimeTray
                     BoxBtn = Ui.Btn("1 · Box Cal", 12, 108, 130),
                     GridBtn = Ui.Btn("2 · Host grid", 152, 108, 130),
                     TestBtn = Ui.Btn("3 · Test", 292, 108, 130),
+                    AllBtn = Ui.Btn("All steps", 432, 108, 130),
                 };
                 r.BoxBtn.Click += (s, e) =>
                 {
@@ -127,7 +128,15 @@ namespace GaimeTray
                 };
                 r.GridBtn.Click += (s, e) => Wizard.Engine.Recalibrate(sn);
                 r.TestBtn.Click += (s, e) => Wizard.Engine.OpenGallery();
-                card.Controls.AddRange(new Control[] { r.Name, r.Box, r.Grid, r.State, r.BoxBtn, r.GridBtn, r.TestBtn });
+                // One click: Box Cal, then the grid opens by itself when Box Cal
+                // is sent, then the gallery to test. No mouse needed in between.
+                r.AllBtn.Click += (s, e) =>
+                {
+                    if (!Wizard.Engine.CalibrateAll(sn))
+                        MessageBox.Show(this, "That gun is not attached.", "Calibrate");
+                };
+                new ToolTip().SetToolTip(r.AllBtn, "Box Cal → host grid → test gallery in one run, driven by the gun's trigger. Esc stops it.");
+                card.Controls.AddRange(new Control[] { r.Name, r.Box, r.Grid, r.State, r.BoxBtn, r.GridBtn, r.TestBtn, r.AllBtn });
                 _list.Controls.Add(card);
                 _rows.Add(r);
                 y += 162;

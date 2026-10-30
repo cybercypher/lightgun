@@ -18,6 +18,7 @@ namespace GaimeTray
         readonly Label _dsState, _tpState, _gamesState, _borderState;
         readonly ListView _profiles;
         readonly Button _borderToggle;
+        readonly CheckBox _fit;
 
         public GamesPage(SetupWizard w) : base(w)
         {
@@ -82,10 +83,25 @@ namespace GaimeTray
             borderRemove.Click += (s, e) => { var t = SelectedTarget(); if (t != null) Border(() => ReshadeBorder.Uninstall(t)); };
             new ToolTip().SetToolTip(_borderToggle, "The white border setting (games + calibration screens). Changing it needs a full recalibration; games pick it up at the next launch");
             new ToolTip().SetToolTip(borderRemove, "Take everything out of the selected game's folder and put back its original DLL if there was one");
-            Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove });
+            _fit = new CheckBox
+            {
+                Text = "Shrink the game inside the border (nothing is covered)", Location = new Point(0, y + 66),
+                AutoSize = true, ForeColor = Ui.Fg, BackColor = Ui.Bg, Checked = w.Config.BorderFit,
+            };
+            _fit.CheckedChanged += (s, e) =>
+            {
+                Wizard.Config.BorderFit = _fit.Checked;
+                try { Wizard.Config.Save(); } catch { }
+                ReshadeBorder.Apply(_tpDir.Text.Trim());
+                Wizard.Engine.Note("setup: border " + (_fit.Checked ? "shrinks the game inside it" : "covers the game's edges") +
+                    " — applies at the next game launch");
+            };
+            new ToolTip().SetToolTip(_fit, "On: the game picture is scaled into the area inside the white frame and the tray maps the aim to match. " +
+                "Off: the frame is drawn over the picture's edges. No recalibration needed either way.");
+            Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove, _fit });
 
             // ---- bridge game list
-            y += 72;
+            y += 96;
             Controls.Add(Ui.Text("Games that turn the bridge on", 0, y, 400, 22, null, 10, true));
             Controls.Add(Ui.Text(
                 "The bridge only moves the cursor while one of these processes is in the foreground. One exe name per line.",
@@ -267,6 +283,7 @@ namespace GaimeTray
             try
             {
                 string msg = action();
+                ReshadeBorder.Apply(_tpDir.Text.Trim());
                 Wizard.Engine.Note("setup: ReShade border " + msg);
                 var keep = _profiles.SelectedItems.Count > 0 ? ((TeknoParrotProfiles.Profile)_profiles.SelectedItems[0].Tag).File : null;
                 Refresh_();

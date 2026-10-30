@@ -84,13 +84,43 @@ namespace GaimeTray
             return new CheckResult(Check.Warn, "Guns", n + " guns connected — the bridge has two players");
         }
 
+        // Windows treats each gun as a touchscreen and moves the OS cursor
+        // wherever it points; the tray can only fight that (RawInput cursor
+        // guard), which leaves the real mouse unusable while a gun is aimed at
+        // the screen. TouchGate = 0 (per user, no admin) stops Windows from
+        // turning touch input into pointer movement; the tray still reads the
+        // guns through RawInput. Takes effect after signing out and in.
+        const string TouchKey = @"Software\Microsoft\Wisp\Touch";
+
+        public static bool TouchGateOff()
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(TouchKey))
+                    return k?.GetValue("TouchGate") is int v && v == 0;
+            }
+            catch { return false; }
+        }
+
+        public static void SetTouchGateOff()
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(TouchKey))
+                k.SetValue("TouchGate", 0, RegistryValueKind.DWord);
+        }
+
+        public static CheckResult TouchCursor() =>
+            TouchGateOff()
+                ? new CheckResult(Check.Ok, "Gun cursor", "Windows does not move the mouse cursor from the guns (TouchGate = 0)")
+                : new CheckResult(Check.Warn, "Gun cursor",
+                    "Windows moves the mouse cursor wherever a gun points, so the mouse fights the gun — press Stop guns moving the cursor, then sign out and in");
+
         public static CheckResult Feeding(FeederEngine eng) =>
             eng.Feeding
                 ? new CheckResult(Check.Ok, "Tray", "feeding")
                 : new CheckResult(Check.Warn, "Tray", "stopped — press Start in the main window");
 
         public static List<CheckResult> All(FeederEngine eng) =>
-            new List<CheckResult> { Scaling(), Resolution(), BridgeMice(), BridgePort(), Guns(), Feeding(eng) };
+            new List<CheckResult> { Scaling(), Resolution(), BridgeMice(), BridgePort(), Guns(), TouchCursor(), Feeding(eng) };
 
         // A Pico in BOOTSEL mode shows up as a removable drive with INFO_UF2.TXT.
         public static string Uf2Drive()

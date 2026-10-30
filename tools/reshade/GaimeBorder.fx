@@ -1,50 +1,55 @@
 /*
  * G'AIM'E white reference border for ReShade.
  *
- * Draws a white frame of an exact number of BACKBUFFER pixels around the game,
- * matching the tray gallery and the 5-point calibration window (see
- * src/GaimeFeeder/ScreenBorder.cs, ScreenBorder.Pixels). Same pixel count
- * everywhere, on purpose: Sinden's border is a fixed pixel count too, and a
- * border that changes thickness between screens changes the reference the
- * player aims inside.
+ * Draws a white frame matching the tray gallery and the calibration window
+ * (src/GaimeFeeder/ScreenBorder.cs, ScreenBorder.Pixels screen pixels on every
+ * edge). Same thickness everywhere, on purpose: Sinden's border is a fixed
+ * pixel count too, and a border that changes thickness between screens
+ * changes the reference the player aims inside.
  *
- * The game's resolution is the backbuffer, so at 3840x2160 this is 32 px on
- * all four edges. If the game runs at a different render size the border is
- * still 32 px of *that* buffer, which is the correct behaviour for a border
- * drawn by the renderer at the end of the frame.
+ * The thickness is a fraction of the image (BORDER_FX of the width,
+ * BORDER_FY of the height), not backbuffer pixels: a game that renders at
+ * 1360x768 and is stretched to a 1920x1080 screen would otherwise get a frame
+ * 1.4x thicker than the tray's. The tray writes the fractions for the current
+ * screen into ReShadePreset.ini (Pixels / screen width and height).
  *
- * Deployed to C:\games\teknoparrot\ElfLdr2\reshade-shaders\Shaders\ by
- * tools/Install-ReshadeBorder.ps1. Keep GAIME_BORDER_PX equal to
- * ScreenBorder.Pixels.
+ * FIT = 1 shrinks the game picture into the area inside the frame, so the
+ * frame covers nothing; the tray then maps the gun's aim into that smaller
+ * area for this game (PicoOutput inset). FIT = 0 draws the frame over the
+ * picture's edges.
+ *
+ * Installed by the tray's setup wizard (Games page, Install border) next to
+ * the game's renderer; see docs/white-border.md.
  */
 
 #include "ReShade.fxh"
 
-#ifndef GAIME_BORDER_PX
-#define GAIME_BORDER_PX 32
-#endif
+uniform float BORDER_FX <
+    ui_type = "drag";
+    ui_min = 0.0; ui_max = 0.1; ui_step = 0.0001;
+    ui_label = "Border width (fraction of the image width)";
+    ui_tooltip = "Written by the tray: ScreenBorder.Pixels / screen width.";
+> = 0.016667;
 
-uniform float BORDER_PX <
-    ui_type = "slider";
-    ui_min = 1.0;
-    ui_max = 128.0;
-    ui_step = 1.0;
-    ui_label = "Border width (pixels)";
-    ui_tooltip = "Thickness of the white frame in backbuffer pixels. Keep it equal to ScreenBorder.Pixels in the tray.";
-> = GAIME_BORDER_PX;
+uniform float BORDER_FY <
+    ui_type = "drag";
+    ui_min = 0.0; ui_max = 0.1; ui_step = 0.0001;
+    ui_label = "Border height (fraction of the image height)";
+    ui_tooltip = "Written by the tray: ScreenBorder.Pixels / screen height.";
+> = 0.029630;
+
+uniform bool FIT <
+    ui_label = "Shrink the game inside the border";
+    ui_tooltip = "On: nothing is covered, the tray maps the aim into the smaller picture. Off: the frame covers the picture's edges.";
+> = true;
 
 float4 PS_GaimeBorder(float4 pos : SV_Position, float2 texcoord : TEXCOORD) : SV_Target
 {
-    float3 color = tex2D(ReShade::BackBuffer, texcoord).rgb;
-
-    // Distance from the nearest edge, in pixels. min() of the four sides.
-    float dx = min(texcoord.x, 1.0 - texcoord.x) * BUFFER_WIDTH;
-    float dy = min(texcoord.y, 1.0 - texcoord.y) * BUFFER_HEIGHT;
-
-    if (min(dx, dy) < BORDER_PX)
-        color = float3(1.0, 1.0, 1.0);
-
-    return float4(color, 1.0);
+    float2 b = float2(BORDER_FX, BORDER_FY);
+    if (any(texcoord < b) || any(texcoord > 1.0 - b))
+        return float4(1.0, 1.0, 1.0, 1.0);
+    float2 uv = FIT ? (texcoord - b) / (1.0 - 2.0 * b) : texcoord;
+    return float4(tex2D(ReShade::BackBuffer, uv).rgb, 1.0);
 }
 
 technique GaimeBorder

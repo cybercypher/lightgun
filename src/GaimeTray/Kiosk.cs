@@ -21,7 +21,10 @@ namespace GaimeTray
     {
         enum Phase { Idle, WaitDevices, Blocked, Launching, Running, Cooldown, Stopped }
 
-        const int DeviceWaitSeconds = 120;   // launch anyway after this
+        // Auto-start at boot only: the bridge and one gun, or launch anyway
+        // after this. (It used to wait for every gun in guns.json for 2 min,
+        // which with one gun attached was a 2-minute delay on every start.)
+        const int DeviceWaitSeconds = 20;
         const int LaunchSeconds = 90;        // game process must appear by then
         const int GoneSeconds = 5;           // game process absent this long = exited
         const int RelaunchDelaySeconds = 5;
@@ -36,6 +39,10 @@ namespace GaimeTray
         Process _tp;
         string _gameProcess;
         int _quickFailures;
+        // Started by hand (Start game / Start game now): the player is there,
+        // so launch at once and only warn about calibration.
+        bool _manual;
+        DateTime _begunAt;
         string _lastBlock;
 
         public event Action<string, string> Balloon;   // title, text
@@ -76,6 +83,7 @@ namespace GaimeTray
         {
             _cfg = SetupConfig.Load();
             if (!_cfg.AutoLaunch || string.IsNullOrEmpty(_cfg.AutoLaunchProfile)) return;
+            _manual = false;
             Begin("tray start");
         }
 
@@ -89,14 +97,17 @@ namespace GaimeTray
                 return;
             }
             _quickFailures = 0;
-            Begin("started from the menu");
+            _manual = true;
+            Begin("started by hand");
         }
 
         void Begin(string why)
         {
             _gameProcess = GameProcessName(_cfg);
             _eng.Note("auto-start: " + why + ", profile " + _cfg.AutoLaunchProfile + ", watching process " + _gameProcess);
-            Enter(Phase.WaitDevices);
+            _begunAt = DateTime.UtcNow;
+            _lastBlock = null;
+            Enter(_manual ? Phase.Blocked : Phase.WaitDevices);
             _timer.Start();
         }
 
@@ -114,6 +125,9 @@ namespace GaimeTray
         {
             _phase = p;
             _since = DateTime.UtcNow;
+            // Timings in the log, so a slow start shows where the time went.
+            _eng.Note("auto-start: " + p.ToString().ToLowerInvariant() + " (+" +
+                (DateTime.UtcNow - _begunAt).TotalSeconds.ToString("0.0") + " s)");
             Changed?.Invoke();
         }
 
@@ -127,7 +141,7 @@ namespace GaimeTray
                 case Phase.WaitDevices:
                     if (DevicesReady() || In() > DeviceWaitSeconds)
                     {
-                        if (!DevicesReady()) _eng.Note("auto-start: bridge/guns not all here after " + DeviceWaitSeconds + " s, launching anyway");
+                        if (!DevicesReady()) _eng.Note("auto-start: no bridge or no gun after " + DeviceWaitSeconds + " s, launching anyway");
                         Enter(Phase.Blocked);
                     }
                     break;
@@ -137,6 +151,14 @@ namespace GaimeTray
                     // setup wizard (it may be calibrating).
                     string block = BlockReason();
                     if (block == null) { Launch(); break; }
+                    if (_manual)
+                    {
+                        // By hand: say what is wrong, but start the game.
+                        _eng.Note("auto-start: starting anyway — " + block);
+                        Balloon?.Invoke("Starting anyway", block);
+                        Launch();
+                        break;
+                    }
                     if (block != _lastBlock)
                     {
                         _lastBlock = block;
@@ -171,9 +193,10 @@ namespace GaimeTray
 
         bool DevicesReady()
         {
-            if (!BridgeDevices.Mice().ContainsKey(0)) return false;
-            int expected = Math.Max(1, GunMap.Read().Values.Count(v => v == 1 || v == 2));
-            return _eng.Snapshot().Count >= expected;
+            // The bridge and one gun. A second gun attaches by itself (the
+            // tray hot-plugs it) and TeknoParrot reads the bridge mice, which
+            // are there either way.
+            return BridgeDevices.Mice().ContainsKey(0) && _eng.Snapshot().Count >= 1;
         }
 
         string BlockReason()

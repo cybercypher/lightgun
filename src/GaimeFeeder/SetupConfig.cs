@@ -16,6 +16,9 @@ namespace GaimeFeeder
         public bool Completed { get; set; }
         // White reference border on (tray screens + ReShade in games).
         public bool BorderOn { get; set; } = true;
+        // In games, shrink the picture inside the border instead of drawing
+        // the border over its edges (ReShade FIT; PicoOutput maps the aim).
+        public bool BorderFit { get; set; } = true;
 
         // Auto-start (wizard Auto-start page, GaimeTray Kiosk): launch this
         // TeknoParrot profile (UserProfiles file name) when the tray starts,

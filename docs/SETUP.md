@@ -148,6 +148,11 @@ The median miss is the number that matters; anything under ~60 px at 4K is
 inside a normal target. If a gun is much worse than that, redo 4b for that gun
 (and 4a first if you changed anything on the gun side).
 
+**One click for all three steps:** the Calibrate page's **All steps** button
+runs Box Cal, opens the host grid by itself as soon as Box Cal reaches the gun,
+then reopens the gallery for the test shots — driven by the gun's trigger, so
+the mouse is not needed in between. Esc stops the run.
+
 ### Re-calibration rules
 
 | Event | What to redo |
@@ -243,9 +248,17 @@ takes `ReShade32.dll` out of it, so the ReShade installer never has to run.
 A `ReShade32.dll` picked directly works too. ReShade itself is not shipped with
 the tray; reshade.me asks for the binaries not to be redistributed.
 
-It installs ReShade as an OpenGL proxy next to `ElfLdr2\BudgieLoader.exe` with a
-border of the same thickness as the tray's own (`ScreenBorder.Pixels`, 32 px),
-applied on launch — no Home key, no overlay. It covers every ElfLdr2 game.
+The border is exactly as thick on screen as the tray's own (`ScreenBorder.Pixels`,
+32 px) whatever resolution the game renders at: the preset stores it as a
+fraction of the screen, rewritten for the current screen every time the tray
+starts. It is applied on launch — no Home key, no overlay.
+
+**Shrink the game inside the border** (Games page, on by default): the game
+picture is scaled into the area inside the frame, so the frame covers nothing,
+and the tray maps the aim into that smaller area while that game is in front
+(the bridge log says `streaming: VACUUM (fit inside border)`). Off: the frame
+is drawn over the picture's edges, which hides a little of each edge. Neither
+needs recalibration — the gun sees the same frame either way.
 **Turn off / Turn on** swaps it out and back in without reinstalling (from the
 next game launch): off renames our `opengl32.dll` to `opengl32.dll.gaime-off`,
 so the game uses the normal Windows OpenGL again — stock `ElfLdr2` has no
@@ -273,9 +286,10 @@ comes back to the game by itself.
      in (a sleeping PC drops the guns).
 
 What happens at start: the tray stays in the task tray (its window would take
-the foreground from the game), waits up to 2 minutes for the bridge and the
-guns in `guns.json`, and does not launch while a gun needs calibration or the
-setup wizard is open (a balloon says why). Then it runs
+the foreground from the game), waits up to 20 seconds for the bridge and one
+gun (a second gun attaches by itself), and does not launch while a gun needs
+calibration or the setup wizard is open (a balloon says why). **Start game** in
+the main window skips the wait and only warns about calibration. Then it runs
 `TeknoParrotUi.exe --profile=<Game>.xml`, brings the game to the front for its
 first 30 s (the bridge only streams to a foreground game), and watches the game
 process (`BudgieLoader` for ElfLdr2 games). If the game closes, it is started
@@ -302,6 +316,8 @@ seconds.
 | Cards appear but aim never moves | the gun is not reporting the digitizer; check Device Manager for the HID digitizer interface |
 | Aim works in the gallery, not in the game | the game is reading a different device. TP: P1/P2 Light Gun must be the bridge mice, Input API = RawInput |
 | Gun 2 does nothing in a game | its TP bindings are unbound (see §5.4), or the game only supports one player |
+| The mouse can't click while a gun points at the screen (calibration, wizard) | Windows moves the cursor wherever a gun points (it treats the gun as a touchscreen). System check → **Stop guns moving the cursor** sets `TouchGate = 0` for your user; sign out and in. The tray still reads the guns. |
+| A game takes long to start from the tray | the Log tab has `auto-start: … (+N.N s)` lines for each stage. **Start game** launches at once; auto-start at boot waits up to 20 s for the bridge and one gun. |
 | Cursor jumps around while nothing is running | that is the gun's digitizer moving the Windows cursor; the tray only pins it while a gun is locked. The bridge does not stream on the desktop. |
 | Aim drifts over a session | IMU drift with the camera path not locking; redo the PC-side grid (§4b) and check the border is on |
 | Aim is scaled/wrong after redoing Box Cal | the PC-side grid was not redone. Order matters (§4) |

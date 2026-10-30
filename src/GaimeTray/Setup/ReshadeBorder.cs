@@ -25,6 +25,7 @@ namespace GaimeTray
         public sealed class Target
         {
             public string Dir, Proxy, Api, Label;
+            public string Process;      // the process the border is drawn in
             public bool Is64, Shared;
             public string Problem;      // non-null: no border possible for this game
             public string Key => (Dir + "|" + Proxy).ToLowerInvariant();
@@ -48,7 +49,7 @@ namespace GaimeTray
                 var dir = ElfLdr(tpDir);
                 return new Target
                 {
-                    Dir = dir, Proxy = "opengl32.dll", Api = "OpenGL", Is64 = false, Shared = true,
+                    Dir = dir, Proxy = "opengl32.dll", Api = "OpenGL", Is64 = false, Shared = true, Process = "BudgieLoader",
                     Label = "ElfLdr2 (shared by every ElfLdr2 game)",
                     Problem = dir != null && File.Exists(Path.Combine(dir, "BudgieLoader.exe"))
                         ? null : "no ElfLdr2\\BudgieLoader.exe in the TeknoParrot folder",
@@ -82,6 +83,7 @@ namespace GaimeTray
             var t = new Target
             {
                 Dir = Path.GetDirectoryName(exe), Proxy = proxy, Api = api, Is64 = machine == 0x8664,
+                Process = Path.GetFileNameWithoutExtension(exe),
                 Label = Path.GetFileName(exe) + " (" + (machine == 0x8664 ? "64" : "32") + "-bit, " + (api ?? "?") + ")",
             };
             if (proxy == null)
@@ -410,10 +412,7 @@ namespace GaimeTray
             File.Copy(Path.Combine(Source, "GaimeBorder.fx"), Path.Combine(shaders, "GaimeBorder.fx"), true);
             File.Copy(Path.Combine(Source, "ReShade.fxh"), Path.Combine(shaders, "ReShade.fxh"), true);
             File.Copy(Path.Combine(Source, "ReShade.ini"), Path.Combine(dir, "ReShade.ini"), true);
-            // The preset carries the thickness; it always matches the tray's own border.
-            var preset = Regex.Replace(File.ReadAllText(Path.Combine(Source, "ReShadePreset.ini")),
-                @"(?m)^BORDER_PX=.*$", "BORDER_PX=" + ScreenBorder.Pixels + ".000000");
-            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), preset);
+            WritePreset(dir, SetupConfig.Load().BorderFit);
             try { File.Delete(Path.Combine(dir, "ReShade.log")); } catch { }
             return "installed: " + ScreenBorder.Pixels + " px border — " + t.Label;
         }
@@ -434,6 +433,53 @@ namespace GaimeTray
             var shaders = Path.Combine(t.Dir, "reshade-shaders");
             if (File.Exists(Path.Combine(shaders, "Shaders", "GaimeBorder.fx"))) Directory.Delete(shaders, true);
             return "removed" + (File.Exists(proxy) ? " (original " + t.Proxy + " restored)" : "");
+        }
+
+        // ---- preset: thickness for this screen, fit or overlay -----------------
+
+        // The screen the border is sized for (the primary display).
+        public static Func<(int w, int h)> ScreenSize = () =>
+        {
+            var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            return (b.Width, b.Height);
+        };
+
+        // The preset carries the thickness as a fraction of the image, so it is
+        // ScreenBorder.Pixels screen pixels whatever the game renders at, plus
+        // FIT (shrink the picture inside the frame). Rewritten when the screen
+        // or the setting changes.
+        static void WritePreset(string dir, bool fit)
+        {
+            var (w, h) = ScreenSize();
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            string text = File.ReadAllText(Path.Combine(Source, "ReShadePreset.ini"));
+            text = Regex.Replace(text, @"(?m)^BORDER_FX=.*$", "BORDER_FX=" + (ScreenBorder.Pixels / (double)Math.Max(1, w)).ToString("0.000000", inv));
+            text = Regex.Replace(text, @"(?m)^BORDER_FY=.*$", "BORDER_FY=" + (ScreenBorder.Pixels / (double)Math.Max(1, h)).ToString("0.000000", inv));
+            text = Regex.Replace(text, @"(?m)^FIT=.*$", "FIT=" + (fit ? "1" : "0"));
+            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), text);
+        }
+
+        // Bring every installed game's preset up to date (screen size, fit) and
+        // return the processes whose picture is shrunk inside the border, for
+        // PicoOutput.SetInsetGames. Called at tray start and after any change.
+        public static List<string> Refresh(string tpDir)
+        {
+            bool fit = SetupConfig.Load().BorderFit;
+            var inset = new List<string>();
+            foreach (var t in AllTargets(tpDir))
+            {
+                var st = Get(t);
+                if (st != State.On && st != State.Off) continue;
+                try { WritePreset(t.Dir, fit); } catch { }
+                if (st == State.On && fit && t.Process != null) inset.Add(t.Process);
+            }
+            return inset;
+        }
+
+        // Refresh the presets and tell the bridge which games are shrunk.
+        public static void Apply(string tpDir)
+        {
+            try { PicoOutput.SetInsetGames(Refresh(tpDir)); } catch { }
         }
 
         // ---- every game at once (the border setting) --------------------------

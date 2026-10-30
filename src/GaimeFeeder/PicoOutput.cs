@@ -77,6 +77,18 @@ namespace GaimeFeeder
         };
 
         static volatile HashSet<string> _games = LoadGames();
+
+        // Games whose picture the ReShade border shrinks inside the frame
+        // (FIT). While one of them is in front, the aim is mapped into the
+        // inner area so it still lands on what the gun points at.
+        static volatile HashSet<string> _insetGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static volatile bool _inset;
+
+        public static void SetInsetGames(IEnumerable<string> names)
+        {
+            _insetGames = new HashSet<string>(names ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            Log("fit-inside-border games: " + (_insetGames.Count == 0 ? "none" : string.Join(", ", _insetGames)));
+        }
         static readonly int _pulsePeriodMs = LoadPulsePeriod();
         static int _pulseTick;
 
@@ -153,6 +165,13 @@ namespace GaimeFeeder
 
             if (player < 0 || player > 1) return;
 
+            if (_inset)
+            {
+                // The game fills the screen minus the border on every edge.
+                double b = ScreenBorder.Pixels;
+                sx = (sx - b) * (screenW - 1) / Math.Max(1.0, screenW - 1 - 2 * b);
+                sy = (sy - b) * (screenH - 1) / Math.Max(1.0, screenH - 1 - 2 * b);
+            }
             double fx = Math.Clamp(sx / Math.Max(1.0, screenW - 1), 0.0, 1.0);
             double fy = Math.Clamp(sy / Math.Max(1.0, screenH - 1), 0.0, 1.0);
             int x = (int)Math.Round(fx * 32767.0);
@@ -317,12 +336,13 @@ namespace GaimeFeeder
                         using var process = Process.GetProcessById((int)pid);
                         name = process.ProcessName;
                         active = _games.Contains(name);
+                        _inset = active && _insetGames.Contains(name);
                     }
                 }
                 catch { }
 
                 _active = active;
-                string gate = active ? "streaming: " + name : "paused: " + name;
+                string gate = active ? "streaming: " + name + (_inset ? " (fit inside border)" : "") : "paused: " + name;
                 if (gate != _lastGate)
                 {
                     _lastGate = gate;

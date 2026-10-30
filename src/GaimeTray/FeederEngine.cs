@@ -44,6 +44,9 @@ namespace GaimeTray
         readonly Dictionary<string, (int x, int y)> _latest = new Dictionary<string, (int x, int y)>();
         readonly Queue<string> _pendingCal = new Queue<string>();
         readonly Dictionary<string, string> _calProblem = new Dictionary<string, string>();
+        // Calibrate (all steps): the gun whose Box Cal -> host grid -> test run
+        // is in progress, so each step opens the next without the mouse.
+        string _chainSn;
         CalibrationWindow _calib;
         string _calibSn;
         ShootingGallery _gallery;
@@ -60,6 +63,11 @@ namespace GaimeTray
                 lock (_guns)
                     if (_guns.TryGetValue(sn, out var g)) _calProblem[sn] = CalStatus.GridProblem(sn, g.Calib);
                 GunsChanged?.Invoke();
+                if (sn == _chainSn)
+                {
+                    Emit(sn + ": Box Cal sent — step 2, the host grid, opens now (3 pulls on each of 9 targets).");
+                    Recalibrate(sn);
+                }
             };
         }
 
@@ -167,6 +175,16 @@ namespace GaimeTray
             return true;
         }
 
+        // Box Cal, then the host grid as soon as Box Cal reaches the gun, then
+        // the gallery to test: one click for the whole order in SETUP.md §4.
+        public bool CalibrateAll(string sn)
+        {
+            if (!OpenBoxCal(sn)) return false;
+            _chainSn = sn;
+            Emit(sn + ": calibrate all steps — step 1, Box Cal (3 pulls on each of 8 targets). Esc stops the run.");
+            return true;
+        }
+
         public void Recalibrate(string sn)
         {
             if (!Feeding || _calib != null) return;
@@ -200,7 +218,12 @@ namespace GaimeTray
             }
             _gallery = new ShootingGallery();
             ShootingGallery.Log = s => Emit(s);
-            _gallery.FormClosed += (s, e) => _gallery = null;
+            _gallery.FormClosed += (s, e) =>
+            {
+                _gallery = null;
+                // Closing the gallery before Box Cal finished ends the run.
+                if (_calib == null) _chainSn = null;
+            };
             _gallery.Show();
             _gallery.Activate();
             return true;
@@ -283,6 +306,12 @@ namespace GaimeTray
                     if (_guns.TryGetValue(target, out var g)) g.Calib = _calib.Result;
                     _calProblem[target] = CalStatus.GridProblem(target, _calib.Result);
                     Emit(_guns[target].Label + ": calibrated (" + _calib.FitInfo + ").");
+                    if (target == _chainSn)
+                    {
+                        _chainSn = null;
+                        Emit(_guns[target].Label + ": step 3 — test it: shoot 20-40 shots in the gallery, Esc when done.");
+                        _ui.Post(_ => OpenGallery(), null);
+                    }
                 }
                 else if (_calib.DialogResult == DialogResult.OK)
                     Emit(_guns[target].Label + ": bad samples, skipped (" + _calib.FitInfo +
@@ -291,6 +320,7 @@ namespace GaimeTray
                     Emit(_guns[target].Label + ": calibration skipped.");
                 // A B test toggle ends with the calibration window.
                 ScreenBorder.Enabled = ScreenBorder.Mode;
+                if (target == _chainSn) _chainSn = null; // grid cancelled or bad: the run ends here
                 _calib = null;
                 GunsChanged?.Invoke();
                 CalibrateNext();

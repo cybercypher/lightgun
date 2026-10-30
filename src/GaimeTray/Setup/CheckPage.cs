@@ -19,7 +19,7 @@ namespace GaimeTray
             Controls.Add(Ui.Text(
                 "Everything the rig needs on the PC side. Rows update by themselves; fix any red row before calibrating.",
                 0, 0, 640, 36, Ui.Dim));
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 7; i++)
             {
                 int y = 44 + i * 34;
                 var g = Ui.Text("", 0, y, 24, 24, null, 12, true);
@@ -29,7 +29,7 @@ namespace GaimeTray
                 _rows.Add((g, n, d));
             }
 
-            int fy = 44 + 6 * 34 + 16;
+            int fy = 44 + 7 * 34 + 16;
             Controls.Add(Ui.Text("Pico bridge firmware", 0, fy, 300, 22, null, 10, true));
             Controls.Add(Ui.Text(
                 "Hold BOOTSEL on the Pico while plugging it in (it shows up as a drive), then press Flash. " +
@@ -42,8 +42,28 @@ namespace GaimeTray
             {
                 try { Process.Start(new ProcessStartInfo("ms-settings:display") { UseShellExecute = true }); } catch { }
             };
+            var touch = Ui.Btn("Stop guns moving the cursor", 300, fy + 64, 210);
+            touch.Click += (s, e) =>
+            {
+                try
+                {
+                    SystemChecks.SetTouchGateOff();
+                    Wizard.Engine.Note("setup: TouchGate = 0 (Windows stops moving the cursor from the guns after sign-out)");
+                    _flashResult.ForeColor = Ui.Lime;
+                    _flashResult.Text = "Done. Sign out of Windows and back in for it to take effect. " +
+                        "Undo: the same setting set to 1 (HKCU\\Software\\Microsoft\\Wisp\\Touch, TouchGate).";
+                }
+                catch (Exception ex)
+                {
+                    _flashResult.ForeColor = Ui.Amber;
+                    _flashResult.Text = "Could not change the setting: " + ex.Message;
+                }
+                Tick();
+            };
+            new ToolTip().SetToolTip(touch, "Windows treats each gun as a touchscreen and moves the cursor where it points. " +
+                "This per-user setting (no admin) stops that; the tray still reads the guns.");
             _flashResult = Ui.Text("", 0, fy + 102, 640, 40, Ui.Lime);
-            Controls.AddRange(new Control[] { flash, display, _flashResult });
+            Controls.AddRange(new Control[] { flash, display, touch, _flashResult });
         }
 
         public override void ShowPage() => Tick();
