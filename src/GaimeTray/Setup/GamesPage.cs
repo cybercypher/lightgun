@@ -175,7 +175,8 @@ namespace GaimeTray
                     var bt = ReshadeBorder.For(cfg.TeknoParrotDir, p.File);
                     var bs = ReshadeBorder.Get(bt);
                     string border = bs == ReshadeBorder.State.On ? "on" : bs == ReshadeBorder.State.Off ? "off"
-                        : bs == ReshadeBorder.State.NotInstalled ? "not installed" : bs == ReshadeBorder.State.Unsupported ? "n/a" : "check";
+                        : bs == ReshadeBorder.State.NotInstalled ? "not installed" : bs == ReshadeBorder.State.Unsupported ? "n/a"
+                        : bs == ReshadeBorder.State.ShaderMissing ? "old — reinstall" : "check";
                     var item = new ListViewItem(new[] { p.Game, p.P1 ? "Bridge Mouse 1" : "—", p.P2 ? "Bridge Mouse 2" : "—", border });
                     item.ForeColor = p.P1 && p.P2 ? Ui.Lime : p.P1 ? Ui.Amber : Ui.Dim;
                     item.Tag = p;

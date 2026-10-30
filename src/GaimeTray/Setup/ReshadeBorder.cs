@@ -339,10 +339,35 @@ namespace GaimeTray
         {
             if (t == null || t.Problem != null || t.Dir == null) return State.Unsupported;
             var proxy = Path.Combine(t.Dir, t.Proxy);
-            bool shader = File.Exists(Path.Combine(t.Dir, "reshade-shaders", "Shaders", "GaimeBorder.fx"));
+            bool shader = ShaderCurrent(t.Dir);
             if (IsReshade(proxy, t.Is64)) return shader ? State.On : State.ShaderMissing;
             if (IsReshade(Path.Combine(t.Dir, Off(t)), t.Is64)) return shader ? State.Off : State.ShaderMissing;
             return File.Exists(proxy) ? State.Foreign : State.NotInstalled;
+        }
+
+        // The game's GaimeBorder.fx is the one this tray ships. An older one
+        // (border drawn over the picture, thickness in game pixels) ignores
+        // the current preset, so it counts as needing Install again.
+        static bool ShaderCurrent(string dir)
+        {
+            try
+            {
+                var have = Path.Combine(dir, "reshade-shaders", "Shaders", "GaimeBorder.fx");
+                var ship = Path.Combine(Source, "GaimeBorder.fx");
+                if (!File.Exists(have)) return false;
+                return !File.Exists(ship) || File.ReadAllBytes(ship).AsSpan().SequenceEqual(File.ReadAllBytes(have));
+            }
+            catch { return false; }
+        }
+
+        // ReShade is in the folder: true = active (the proxy), false = switched
+        // off (.gaime-off), null = not installed. Independent of the shader.
+        static bool? Installed(Target t)
+        {
+            if (t?.Dir == null || t.Problem != null) return null;
+            if (IsReshade(Path.Combine(t.Dir, t.Proxy), t.Is64)) return true;
+            if (IsReshade(Path.Combine(t.Dir, Off(t)), t.Is64)) return false;
+            return null;
         }
 
         public static string Describe(Target t, State st)
@@ -354,7 +379,7 @@ namespace GaimeTray
                 case State.On: return "border ON — " + t.Label;
                 case State.Off: return "border OFF (installed; the game uses its original " + t.Proxy + ") — " + t.Label;
                 case State.Foreign: return "another " + t.Proxy + " is there — Install keeps it as a backup";
-                default: return "border shader missing — Install again";
+                default: return "border shader missing or out of date (older tray) — press Install border";
             }
         }
 
@@ -369,8 +394,8 @@ namespace GaimeTray
             var orig = Path.Combine(t.Dir, Orig(t));
             if (on)
             {
-                if (st == State.On) return Describe(t, st);
-                if (st != State.Off) throw new InvalidOperationException("install the border first");
+                if (Installed(t) == true) return Describe(t, st);
+                if (Installed(t) != false) throw new InvalidOperationException("install the border first");
                 if (File.Exists(proxy))
                 {
                     if (File.Exists(orig)) throw new InvalidOperationException("both " + t.Proxy + " and its backup exist — remove one by hand");
@@ -380,8 +405,8 @@ namespace GaimeTray
             }
             else
             {
-                if (st == State.Off) return Describe(t, st);
-                if (st != State.On && st != State.ShaderMissing) throw new InvalidOperationException("the border is not installed");
+                if (Installed(t) == false) return Describe(t, st);
+                if (Installed(t) != true) throw new InvalidOperationException("the border is not installed");
                 if (File.Exists(off)) File.Delete(off);
                 File.Move(proxy, off);
                 if (File.Exists(orig)) File.Move(orig, proxy);
@@ -468,8 +493,8 @@ namespace GaimeTray
             var inset = new List<string>();
             foreach (var t in AllTargets(tpDir))
             {
-                var st = Get(t);
-                if (st != State.On && st != State.Off) continue;
+                var on = Installed(t);
+                if (on == null) continue;
                 try
                 {
                     // An install from an older tray has the older shader.
@@ -485,7 +510,7 @@ namespace GaimeTray
                     WritePreset(t.Dir, fit);
                 }
                 catch { }
-                if (st == State.On && fit && t.Process != null) inset.Add(t.Process);
+                if (on == true && fit && ShaderCurrent(t.Dir) && t.Process != null) inset.Add(t.Process);
             }
             return inset;
         }
@@ -510,9 +535,8 @@ namespace GaimeTray
             var lines = new List<string>();
             foreach (var t in AllTargets(tpDir))
             {
-                var st = Get(t);
-                if (st != State.On && st != State.Off) continue;
-                if ((st == State.On) == on) continue;
+                var now = Installed(t);
+                if (now == null || now == on) continue;
                 try { SetEnabled(t, on); lines.Add(t.Label + ": " + (on ? "on" : "off")); }
                 catch (Exception ex) { lines.Add(t.Label + ": NOT switched — " + ex.Message); }
             }
