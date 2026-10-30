@@ -230,8 +230,14 @@ Where it goes depends on the game:
 | ElfLdr2 (Raw Thrills / Linux titles: Jurassic Park, Terminator) | `TeknoParrot\ElfLdr2\`, shared by every ElfLdr2 game | 32-bit, `opengl32.dll` |
 | Windows games (Luigi's Mansion, `exe\x64\VACUUM.exe`) | next to the game's exe | 32/64-bit like the exe; `dxgi.dll` for Direct3D 10/11/12, `d3d9.dll`, or `opengl32.dll` — read from the DLLs the exe (or a DLL beside it) loads |
 
-A game whose profile path is not a Windows `.exe`, or whose graphics API
-cannot be told, shows `n/a` with the reason. Download the standard ReShade from reshade.me (not
+Protected exes hide the API: Luigi's Mansion's `VACUUM.exe` is packed by
+Capcom (its code sections are empty on disk and unpacked at runtime), so it is
+treated as Direct3D 11 because its stub loads the Direct3D shader compiler
+`d3dcompiler_46.dll` — shown as *inferred*. When nothing can be told, **Install
+border** asks for the API (Direct3D 10/11/12, Direct3D 9, OpenGL) and remembers
+it for that exe in `setup.json`; if the border then doesn't show in the game,
+**Remove** and pick another. A profile whose game path is not a Windows `.exe`
+shows `n/a` with the reason. Download the standard ReShade from reshade.me (not
 the add-on build) and pick the `ReShade_Setup_*.exe` when asked: the wizard
 takes `ReShade32.dll` out of it, so the ReShade installer never has to run.
 A `ReShade32.dll` picked directly works too. ReShade itself is not shipped with

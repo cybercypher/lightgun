@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -24,6 +25,11 @@ namespace GaimeFeeder
         public bool RestartOnExit { get; set; } = true;
         // Hold Start + Coin on one gun this long to leave the game.
         public int ExitComboSeconds { get; set; } = 5;
+
+        // Border DLL name chosen by hand for a game exe whose graphics API
+        // cannot be read from the file (protected exes): exe path -> proxy
+        // DLL name (dxgi.dll, d3d9.dll, opengl32.dll).
+        public Dictionary<string, string> BorderProxy { get; set; } = new Dictionary<string, string>();
 
         public static string FilePath => Path.Combine(AppPaths.Root, "setup.json");
 

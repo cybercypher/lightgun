@@ -206,6 +206,16 @@ namespace GaimeTray
         {
             var t = SelectedTarget();
             if (t == null) return;
+            if (t.Problem != null && t.Problem.StartsWith("could not tell"))
+            {
+                // Protected exes hide their graphics API: ask once, remember it.
+                var p = (TeknoParrotProfiles.Profile)_profiles.SelectedItems[0].Tag;
+                string exe = ReshadeBorder.ExeOf(p.File);
+                string pick = PickApi(Path.GetFileName(exe));
+                if (pick == null || exe == null) return;
+                ReshadeBorder.Choose(exe, pick);
+                t = ReshadeBorder.For(_tpDir.Text.Trim(), p.File);
+            }
             if (t.Problem != null) { State(_borderState, Check.Fail, t.Problem); return; }
             string dll = ReshadeBorder.FindDll(t);
             if (dll == null)
@@ -224,6 +234,32 @@ namespace GaimeTray
             // A fresh install is on; follow the border setting if it is off.
             Border(() => ReshadeBorder.Install(t, dll) +
                 (ScreenBorder.Mode ? "" : "; " + ReshadeBorder.SetEnabled(t, false)));
+        }
+
+        // Small dialog: which graphics API does this game use?
+        string PickApi(string exeName)
+        {
+            using (var f = new Form
+            {
+                Text = "Graphics API", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false, MaximizeBox = false, ClientSize = new Size(420, 190), BackColor = Ui.Bg, ForeColor = Ui.Fg,
+                Font = new Font("Segoe UI", 9),
+            })
+            {
+                f.Controls.Add(Ui.Text("The border can't tell which graphics API " + exeName + " uses (its file is protected). " +
+                    "Pick one; if the border doesn't show in the game, Remove and pick another.", 14, 12, 392, 54, Ui.Dim));
+                var radios = ReshadeBorder.Choices.Select((c, i) => new RadioButton
+                {
+                    Text = c.label + "  (" + c.proxy + ")", Tag = c.proxy, Location = new Point(18, 70 + i * 26), AutoSize = true,
+                    Checked = i == 0, ForeColor = Ui.Fg, BackColor = Ui.Bg,
+                }).ToArray();
+                f.Controls.AddRange(radios);
+                var ok = Ui.Btn("OK", 230, 150, 86); ok.DialogResult = DialogResult.OK;
+                var cancel = Ui.Btn("Cancel", 322, 150, 86); cancel.DialogResult = DialogResult.Cancel;
+                f.Controls.AddRange(new Control[] { ok, cancel });
+                f.AcceptButton = ok; f.CancelButton = cancel;
+                return f.ShowDialog(this) == DialogResult.OK ? (string)radios.First(r => r.Checked).Tag : null;
+            }
         }
 
         void Border(Func<string> action)

@@ -77,6 +77,8 @@ namespace GaimeTray
             ushort machine = Machine(b);
             if (machine != 0x14c && machine != 0x8664) return new Target { Problem = Path.GetFileName(exe) + " is not an x86/x64 program" };
             var (api, proxy) = DetectApi(exe, b);
+            if (proxy == null && Chosen(exe) is string pick)
+                (api, proxy) = (ApiOf(pick) + " (chosen)", pick);
             var t = new Target
             {
                 Dir = Path.GetDirectoryName(exe), Proxy = proxy, Api = api, Is64 = machine == 0x8664,
@@ -84,7 +86,7 @@ namespace GaimeTray
             };
             if (proxy == null)
                 t.Problem = api == null
-                    ? "could not tell which graphics API " + Path.GetFileName(exe) + " uses"
+                    ? "could not tell which graphics API " + Path.GetFileName(exe) + " uses — Install border lets you pick it"
                     : api + " is not supported for the border";
             return t;
         }
@@ -94,7 +96,7 @@ namespace GaimeTray
         static (string api, string proxy) DetectApi(string exe, byte[] exeBytes)
         {
             var found = Classify(Imports(exeBytes));
-            if (found.api != null) return found;
+            if (found.api != null && !found.api.Contains("inferred")) return found;
             try
             {
                 foreach (var dll in Directory.GetFiles(Path.GetDirectoryName(exe), "*.dll"))
@@ -102,11 +104,50 @@ namespace GaimeTray
                     var name = Path.GetFileName(dll).ToLowerInvariant();
                     if (name.EndsWith(".gaime-off") || IsReshade(dll)) continue;
                     var r = Classify(Imports(File.ReadAllBytes(dll)));
-                    if (r.api != null) return r;
+                    if (r.api != null && !r.api.Contains("inferred")) return r;
                 }
             }
             catch { }
-            return (null, null);
+            return found;
+        }
+
+        // Choices for a game whose API cannot be read (Install border asks).
+        public static readonly (string label, string proxy)[] Choices =
+        {
+            ("Direct3D 10 / 11 / 12", "dxgi.dll"),
+            ("Direct3D 9", "d3d9.dll"),
+            ("OpenGL", "opengl32.dll"),
+        };
+
+        static string ApiOf(string proxy) =>
+            Choices.FirstOrDefault(c => c.proxy == proxy).label ?? proxy;
+
+        static string Chosen(string exe)
+        {
+            var map = SetupConfig.Load().BorderProxy;
+            return map != null && map.TryGetValue(exe.ToLowerInvariant(), out var p) &&
+                   Choices.Any(c => c.proxy == p) ? p : null;
+        }
+
+        // Remember a hand-picked API for this exe; clears the cached answer.
+        public static void Choose(string exe, string proxy)
+        {
+            var cfg = SetupConfig.Load();
+            cfg.BorderProxy = cfg.BorderProxy ?? new Dictionary<string, string>();
+            cfg.BorderProxy[exe.ToLowerInvariant()] = proxy;
+            cfg.Save();
+            lock (Cache) Cache.Clear();
+        }
+
+        // The exe the profile runs (null for ElfLdr2 / non-exe profiles).
+        public static string ExeOf(string profileFile)
+        {
+            try
+            {
+                string exe = (string)XDocument.Load(profileFile).Root?.Element("GamePath") ?? "";
+                return exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exe : null;
+            }
+            catch { return null; }
         }
 
         static (string api, string proxy) Classify(List<string> imports)
@@ -120,6 +161,11 @@ namespace GaimeTray
             if (Has("dxgi.dll")) return ("DXGI", "dxgi.dll");
             if (Has("d3d8.dll")) return ("Direct3D 8", null);
             if (Has("vulkan-1.dll")) return ("Vulkan", null);
+            // Protected exes (Capcom's packer on Luigi's Mansion) hide their real
+            // imports; the unpacking stub still loads the Direct3D shader
+            // compiler, which goes with Direct3D 10/11.
+            if (imports.Any(i => i.StartsWith("d3dcompiler_")))
+                return ("Direct3D 11 (inferred from " + imports.First(i => i.StartsWith("d3dcompiler_")) + ")", "dxgi.dll");
             return (null, null);
         }
 
