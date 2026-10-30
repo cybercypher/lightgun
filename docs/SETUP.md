@@ -221,8 +221,17 @@ the game window is up, as usual.
 
 Games render at whatever aspect they like; a constant white frame gives you (and
 the gun's optical path) the same reference as the calibration screens. With
-TeknoParrot's ELF loader (Raw Thrills / Linux titles), use **Install border**
-on the wizard's Games page. Download the standard ReShade from reshade.me (not
+TeknoParrot games, select the game in the wizard's Games page list and use
+**Install border**; the list's **Border** column shows each game's state.
+Where it goes depends on the game:
+
+| game type | where ReShade goes | DLL |
+|---|---|---|
+| ElfLdr2 (Raw Thrills / Linux titles: Jurassic Park, Terminator) | `TeknoParrot\ElfLdr2\`, shared by every ElfLdr2 game | 32-bit, `opengl32.dll` |
+| Windows games (Luigi's Mansion, `exe\x64\VACUUM.exe`) | next to the game's exe | 32/64-bit like the exe; `dxgi.dll` for Direct3D 10/11/12, `d3d9.dll`, or `opengl32.dll` — read from the DLLs the exe (or a DLL beside it) loads |
+
+A game whose profile path is not a Windows `.exe`, or whose graphics API
+cannot be told, shows `n/a` with the reason. Download the standard ReShade from reshade.me (not
 the add-on build) and pick the `ReShade_Setup_*.exe` when asked: the wizard
 takes `ReShade32.dll` out of it, so the ReShade installer never has to run.
 A `ReShade32.dll` picked directly works too. ReShade itself is not shipped with
@@ -266,6 +275,11 @@ first 30 s (the bridge only streams to a foreground game), and watches the game
 process (`BudgieLoader` for ElfLdr2 games). If the game closes, it is started
 again 5 s later; three exits within 2 minutes of their launch in a row stop the
 restarts and show the window instead.
+
+**Starting by hand:** the main window has a **Game** bar under the header:
+pick the game, **Start game** runs it through the same steps (wait for the
+guns, check calibration, keep it in front, restart it if it closes), **Stop
+game** closes it. The picked game is the same setting as the Auto-start page.
 
 **Leaving the game:** hold **Start + Coin** on either gun for 5 seconds (the
 time is set on the page). The game closes, auto-restart stops for this session

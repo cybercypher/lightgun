@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using GaimeFeeder;
@@ -23,6 +24,8 @@ namespace GaimeTray
         Button _capBtn;
         readonly Label _capResult = new Label();
         readonly Timer _tick = new Timer();
+        ComboBox _game;
+        Label _gameState;
         bool _wasFeeding;
 
         static readonly Color Bg = Color.FromArgb(24, 25, 28);
@@ -35,8 +38,8 @@ namespace GaimeTray
         {
             _eng = eng;
             Text = "G'AIM'E Tray";
-            Size = new Size(800, 600);
-            MinimumSize = new Size(760, 540);
+            Size = new Size(800, 644);
+            MinimumSize = new Size(760, 584);
             BackColor = Bg;
             ForeColor = Fg;
             Font = new Font("Segoe UI", 9);
@@ -89,6 +92,7 @@ namespace GaimeTray
             };
             head.Controls.AddRange(new Control[] { title, _statePill, _startStop, _testBtn, _autostart, trayNote });
             Controls.Add(head);
+            Controls.Add(MkGameBar());
 
             // gun cards
             var cards = new FlowLayoutPanel
@@ -123,6 +127,75 @@ namespace GaimeTray
             _tick.Tick += (s, e) => RefreshLive();
             _tick.Start();
             RefreshChrome();
+        }
+
+        // Game bar: pick a TeknoParrot game, start it through the same
+        // controller as auto-start (waits for the guns, checks calibration,
+        // keeps the game in front, restarts it, Start + Coin exits).
+        Panel MkGameBar()
+        {
+            var bar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Bg };
+            bar.Controls.Add(new Label
+            {
+                Text = "Game", Location = new Point(14, 14), AutoSize = true,
+                ForeColor = Fg, BackColor = Bg, Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            });
+            _game = new ComboBox
+            {
+                Location = new Point(62, 10), Size = new Size(260, 24), DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Panel, ForeColor = Fg, FlatStyle = FlatStyle.Flat,
+            };
+            _game.DropDown += (s, e) => FillGames();
+            _game.SelectionChangeCommitted += (s, e) =>
+            {
+                if (!(_game.SelectedItem is GameItem g)) return;
+                var cfg = SetupConfig.Load();
+                cfg.AutoLaunchProfile = g.FileName;
+                try { cfg.Save(); } catch { }
+            };
+            var start = MkBtn("Start game", 332, 8);
+            start.Size = new Size(100, 28);
+            start.Click += (s, e) =>
+            {
+                if (_game.SelectedItem == null)
+                {
+                    MessageBox.Show(this, "Pick a game first. Games come from TeknoParrot's profiles (set the folder in the setup wizard).",
+                        "Start game", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                Kiosk.Instance?.StartNow();
+            };
+            var stop = MkBtn("Stop game", 438, 8);
+            stop.Size = new Size(100, 28);
+            stop.Click += (s, e) => Kiosk.Instance?.Stop("main window", true);
+            new ToolTip().SetToolTip(stop, "Close the game and stop restarting it (or hold Start + Coin on a gun)");
+            _gameState = new Label
+            {
+                Location = new Point(548, 14), Size = new Size(230, 20), AutoEllipsis = true,
+                ForeColor = Dim, BackColor = Bg,
+            };
+            bar.Controls.AddRange(new Control[] { _game, start, stop, _gameState });
+            FillGames();
+            return bar;
+        }
+
+        void FillGames()
+        {
+            var cfg = SetupConfig.Load();
+            string keep = (_game.SelectedItem as GameItem)?.FileName ?? cfg.AutoLaunchProfile;
+            _game.Items.Clear();
+            foreach (var p in TeknoParrotProfiles.Scan(cfg.TeknoParrotDir))
+                _game.Items.Add(new GameItem(p));
+            _game.SelectedItem = _game.Items.Cast<GameItem>().FirstOrDefault(i =>
+                string.Equals(i.FileName, keep, StringComparison.OrdinalIgnoreCase));
+        }
+
+        sealed class GameItem
+        {
+            readonly TeknoParrotProfiles.Profile _p;
+            public GameItem(TeknoParrotProfiles.Profile p) { _p = p; }
+            public string FileName => Path.GetFileName(_p.File);
+            public override string ToString() => _p.Game + (_p.P1 && _p.P2 ? "" : "  (guns not bound)");
         }
 
         TabPage MkLogPage()
@@ -236,6 +309,12 @@ namespace GaimeTray
 
         void RefreshLive()
         {
+            var k = Kiosk.Instance;
+            if (_gameState != null && k != null)
+            {
+                string st = k.Active ? k.Status : "not running";
+                if (_gameState.Text != st) _gameState.Text = st;
+            }
             var snap = _eng.Snapshot();
             if (snap.Count > 0) _c1.Show(snap[0]);
             if (snap.Count > 1) _c2.Show(snap[1]);

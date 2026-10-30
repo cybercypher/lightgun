@@ -262,19 +262,9 @@ namespace GaimeTray
 
         // ElfLdr2 games run inside BudgieLoader; other loaders run the game's
         // own exe (GamePath in the profile).
-        static string GameProcessName(SetupConfig cfg)
-        {
-            try
-            {
-                var doc = XDocument.Load(Path.Combine(cfg.TeknoParrotDir, "UserProfiles", cfg.AutoLaunchProfile));
-                string emu = (string)doc.Root?.Element("EmulatorType") ?? "";
-                if (emu.StartsWith("ElfLdr", StringComparison.OrdinalIgnoreCase)) return "BudgieLoader";
-                string path = (string)doc.Root?.Element("GamePath") ?? "";
-                if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return Path.GetFileNameWithoutExtension(path);
-            }
-            catch { }
-            return "BudgieLoader";
-        }
+        static string GameProcessName(SetupConfig cfg) =>
+            TeknoParrotProfiles.GameProcess(Path.Combine(cfg.TeknoParrotDir ?? "", "UserProfiles", cfg.AutoLaunchProfile ?? ""))
+            ?? "BudgieLoader";
 
         bool GameRunning() => Process.GetProcessesByName(_gameProcess).Length > 0;
 

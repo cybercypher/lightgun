@@ -110,6 +110,22 @@ namespace GaimeTray
         public static bool Running() =>
             Process.GetProcessesByName("TeknoParrotUi").Length > 0;
 
+        // The process the game runs in: ElfLdr2 games run inside BudgieLoader,
+        // other loaders run the game's own exe (GamePath in the profile).
+        public static string GameProcess(string profileFile)
+        {
+            try
+            {
+                var doc = XDocument.Load(profileFile);
+                string emu = (string)doc.Root?.Element("EmulatorType") ?? "";
+                if (emu.StartsWith("ElfLdr", StringComparison.OrdinalIgnoreCase)) return "BudgieLoader";
+                string path = (string)doc.Root?.Element("GamePath") ?? "";
+                if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return Path.GetFileNameWithoutExtension(path);
+            }
+            catch { }
+            return null;
+        }
+
         // Gun rows by TP's InputMapping, which is the same across games (the
         // ButtonName labels are not: "Trigger P1" in Jurassic Park is "Player 1
         // Vacuum Button" in Luigi's Mansion). Each maps to a button on that

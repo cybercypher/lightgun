@@ -157,13 +157,8 @@ namespace GaimeTray
             ScreenBorder.Mode = ScreenBorder.Enabled = on;
             Config.BorderOn = on;
             try { Config.Save(); } catch { }
-            string game = "";
-            var st = ReshadeBorder.Get(Config.TeknoParrotDir);
-            if (st == ReshadeBorder.State.On || st == ReshadeBorder.State.Off)
-            {
-                try { ReshadeBorder.SetEnabled(Config.TeknoParrotDir, on); game = ", game border " + (on ? "on" : "off"); }
-                catch (Exception ex) { game = ", game border NOT switched: " + ex.Message; }
-            }
+            var switched = ReshadeBorder.SetAll(Config.TeknoParrotDir, on);
+            string game = switched.Count == 0 ? "" : "; games: " + string.Join(", ", switched);
             Engine.Note("setup: white border " + (on ? "ON" : "OFF") + game + " — all guns need Box Cal + host grid");
             Engine.RefreshCalStatus();
             return true;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32;
@@ -253,6 +254,20 @@ namespace GaimeFeeder
         // Re-read bridge-processes.txt after the setup wizard edits it. The
         // feed thread only reads the reference, so swapping it is enough.
         public static void ReloadGames() => _games = LoadGames();
+
+        // Make sure one game process unlocks the stream (setup wizard, after
+        // binding a game). Writes bridge-processes.txt from the current list
+        // when it does not exist yet. True when the list changed.
+        public static bool EnsureGame(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || _games.Contains(name)) return false;
+            var names = Games();
+            names.Add(name);
+            File.WriteAllLines(AppPaths.BridgeProcesses,
+                new[] { "# Game processes that turn the Pico bridge on (setup wizard)." }.Concat(names));
+            ReloadGames();
+            return true;
+        }
 
         // The bridge's CDC function is USB\VID_1209&PID_0A11&MI_02; Windows
         // stores the assigned COM name under the instance's Device Parameters.

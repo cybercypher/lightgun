@@ -57,14 +57,16 @@ namespace GaimeTray
                 FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable,
                 BackColor = Ui.Panel, ForeColor = Ui.Fg, BorderStyle = BorderStyle.None,
             };
-            _profiles.Columns.Add("Game profile", 360);
-            _profiles.Columns.Add("P1 gun", 130);
-            _profiles.Columns.Add("P2 gun", 130);
+            _profiles.Columns.Add("Game profile", 270);
+            _profiles.Columns.Add("P1 gun", 115);
+            _profiles.Columns.Add("P2 gun", 115);
+            _profiles.Columns.Add("Border", 120);
+            _profiles.SelectedIndexChanged += (s, e) => ShowBorder();
             Controls.AddRange(new Control[] { _tpDir, tpBrowse, tpFind, _tpState, tpBind, tpOpen, _profiles });
 
-            // ---- white border (ReShade) for ElfLdr2 games
+            // ---- white border (ReShade) for the selected game
             y += 216;
-            Controls.Add(Ui.Text("White border in ElfLdr2 games (ReShade)", 0, y, 400, 22, null, 10, true));
+            Controls.Add(Ui.Text("White border in the selected game (ReShade)", 0, y, 400, 22, null, 10, true));
             _borderState = Ui.Text("", 0, y + 26, 250, 40, Ui.Dim);
             var borderInstall = Ui.Btn("Install border", 258, y + 22, 120);
             borderInstall.Click += (s, e) => InstallBorder();
@@ -77,9 +79,9 @@ namespace GaimeTray
                 if (Wizard.SetBorder(!ScreenBorder.Mode)) Refresh_();
             };
             var borderRemove = Ui.Btn("Remove", 508, y + 22, 130);
-            borderRemove.Click += (s, e) => Border(() => ReshadeBorder.Uninstall(_tpDir.Text.Trim()));
+            borderRemove.Click += (s, e) => { var t = SelectedTarget(); if (t != null) Border(() => ReshadeBorder.Uninstall(t)); };
             new ToolTip().SetToolTip(_borderToggle, "The white border setting (games + calibration screens). Changing it needs a full recalibration; games pick it up at the next launch");
-            new ToolTip().SetToolTip(borderRemove, "Take everything out and put back the original opengl32.dll if there was one");
+            new ToolTip().SetToolTip(borderRemove, "Take everything out of the selected game's folder and put back its original DLL if there was one");
             Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove });
 
             // ---- bridge game list
@@ -154,7 +156,11 @@ namespace GaimeTray
                 var list = TeknoParrotProfiles.Scan(cfg.TeknoParrotDir);
                 foreach (var p in list)
                 {
-                    var item = new ListViewItem(new[] { p.Game, p.P1 ? "Bridge Mouse 1" : "—", p.P2 ? "Bridge Mouse 2" : "—" });
+                    var bt = ReshadeBorder.For(cfg.TeknoParrotDir, p.File);
+                    var bs = ReshadeBorder.Get(bt);
+                    string border = bs == ReshadeBorder.State.On ? "on" : bs == ReshadeBorder.State.Off ? "off"
+                        : bs == ReshadeBorder.State.NotInstalled ? "not installed" : bs == ReshadeBorder.State.Unsupported ? "n/a" : "check";
+                    var item = new ListViewItem(new[] { p.Game, p.P1 ? "Bridge Mouse 1" : "—", p.P2 ? "Bridge Mouse 2" : "—", border });
                     item.ForeColor = p.P1 && p.P2 ? Ui.Lime : p.P1 ? Ui.Amber : Ui.Dim;
                     item.Tag = p;
                     _profiles.Items.Add(item);
@@ -164,32 +170,49 @@ namespace GaimeTray
                     list.Count == 0 ? "no game profiles yet — add a game in TeknoParrot first"
                     : full + " of " + list.Count + " profiles bound for two guns. Select games, then Bind to guns.");
             }
-            if (cfg.TeknoParrotDir.Length == 0) { State(_borderState, Check.Info, "set the TeknoParrot folder first"); _borderToggle.Enabled = false; }
-            else
-            {
-                var st = ReshadeBorder.Get(cfg.TeknoParrotDir);
-                State(_borderState, st == ReshadeBorder.State.On ? Check.Ok
-                    : st == ReshadeBorder.State.Off || st == ReshadeBorder.State.NotInstalled ? Check.Info : Check.Warn,
-                    ReshadeBorder.Describe(st));
-                _borderToggle.Enabled = true;
-                _borderToggle.Text = ScreenBorder.Mode ? "Turn off" : "Turn on";
-                // Files changed by hand (or before the setting existed).
-                if ((st == ReshadeBorder.State.On && !ScreenBorder.Mode) || (st == ReshadeBorder.State.Off && ScreenBorder.Mode))
-                    State(_borderState, Check.Warn, ReshadeBorder.Describe(st) + " — but the border setting is " +
-                        (ScreenBorder.Mode ? "ON" : "OFF") + "; Install again to match");
-            }
+            _borderToggle.Text = ScreenBorder.Mode ? "Turn off" : "Turn on";
+            ShowBorder();
             try { cfg.Save(); } catch { }
+        }
+
+        // The border target of the game selected in the list (null: none).
+        ReshadeBorder.Target SelectedTarget()
+        {
+            var p = _profiles.SelectedItems.Cast<ListViewItem>().Select(i => i.Tag as TeknoParrotProfiles.Profile).FirstOrDefault();
+            if (p == null) { State(_borderState, Check.Info, "select a game in the list above"); return null; }
+            return ReshadeBorder.For(_tpDir.Text.Trim(), p.File);
+        }
+
+        void ShowBorder()
+        {
+            if (Wizard.Config.TeknoParrotDir.Length == 0) { State(_borderState, Check.Info, "set the TeknoParrot folder first"); return; }
+            if (_profiles.SelectedItems.Count == 0)
+            {
+                State(_borderState, Check.Info, "select a game in the list above (ElfLdr2 games share one install)");
+                return;
+            }
+            var t = SelectedTarget();
+            var st = ReshadeBorder.Get(t);
+            State(_borderState, st == ReshadeBorder.State.On ? Check.Ok
+                : st == ReshadeBorder.State.Off || st == ReshadeBorder.State.NotInstalled ? Check.Info : Check.Warn,
+                ReshadeBorder.Describe(t, st));
+            // Files changed by hand (or before the setting existed).
+            if ((st == ReshadeBorder.State.On && !ScreenBorder.Mode) || (st == ReshadeBorder.State.Off && ScreenBorder.Mode))
+                State(_borderState, Check.Warn, ReshadeBorder.Describe(t, st) + " — but the border setting is " +
+                    (ScreenBorder.Mode ? "ON" : "OFF") + "; Install again to match");
         }
 
         void InstallBorder()
         {
-            string tp = _tpDir.Text.Trim();
-            string dll = ReshadeBorder.FindDll(tp);
+            var t = SelectedTarget();
+            if (t == null) return;
+            if (t.Problem != null) { State(_borderState, Check.Fail, t.Problem); return; }
+            string dll = ReshadeBorder.FindDll(t);
             if (dll == null)
             {
                 using (var dlg = new OpenFileDialog
                 {
-                    Filter = "ReShade download (ReShade_Setup_*.exe, ReShade32.dll)|ReShade_Setup*.exe;ReShade32.dll;*.dll|All files|*.*",
+                    Filter = "ReShade download (ReShade_Setup_*.exe, ReShade32/64.dll)|ReShade_Setup*.exe;ReShade32.dll;ReShade64.dll;*.dll|All files|*.*",
                     Title = "Pick the ReShade_Setup_*.exe downloaded from reshade.me",
                     InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
                 })
@@ -199,8 +222,8 @@ namespace GaimeTray
                 }
             }
             // A fresh install is on; follow the border setting if it is off.
-            Border(() => ReshadeBorder.Install(tp, dll) +
-                (ScreenBorder.Mode ? "" : "; " + ReshadeBorder.SetEnabled(tp, false)));
+            Border(() => ReshadeBorder.Install(t, dll) +
+                (ScreenBorder.Mode ? "" : "; " + ReshadeBorder.SetEnabled(t, false)));
         }
 
         void Border(Func<string> action)
@@ -209,7 +232,10 @@ namespace GaimeTray
             {
                 string msg = action();
                 Wizard.Engine.Note("setup: ReShade border " + msg);
+                var keep = _profiles.SelectedItems.Count > 0 ? ((TeknoParrotProfiles.Profile)_profiles.SelectedItems[0].Tag).File : null;
                 Refresh_();
+                foreach (ListViewItem i in _profiles.Items)
+                    if (((TeknoParrotProfiles.Profile)i.Tag).File == keep) i.Selected = true;
                 _borderState.Text = Ui.Glyph(Check.Ok) + "  " + msg;
             }
             catch (Exception ex) { State(_borderState, Check.Fail, ex.Message); }
@@ -237,6 +263,9 @@ namespace GaimeTray
                 try
                 {
                     last = p.Game + ": " + TeknoParrotProfiles.Bind(p.File, mice);
+                    // The bridge only streams to listed game processes.
+                    string proc = TeknoParrotProfiles.GameProcess(p.File);
+                    if (proc != null && PicoOutput.EnsureGame(proc)) last += "; " + proc + " added to the bridge games";
                     Wizard.Engine.Note("setup: TeknoParrot " + last);
                     ok++;
                 }
