@@ -163,10 +163,24 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 
 1. Add the game in TP once (so `UserProfiles\<Game>.xml` exists), then close TP.
    In the wizard's Games page select the game and press **Bind to guns**. It
-   sets **Input API = RawInput** and writes every gun row below for both
-   players (with a timestamped backup); operator rows (Test, Service, Volume,
-   test-menu navigation) keep what you bound. Start/Coin go to the gun's own
-   Start/Coin buttons (Button5/Button4). The manual route, for reference:
+   sets **Input API = RawInput** and writes every gun row for both players
+   (with a timestamped backup). Rows are matched by TP's internal
+   `InputMapping`, which is the same in every game whatever the label says:
+
+   | `InputMapping` | gun | Jurassic Park | Luigi's Mansion |
+   |---|---|---|---|
+   | `P1LightGun` | aim (Bridge Mouse 1) | P1 Light Gun | Player 1 Light Gun |
+   | `P1Button1` | Trigger → `LeftButton` | Trigger P1 | Player 1 Vacuum Button |
+   | `P1Button2` | A → `MiddleButton` | Grenades P1 | Player 1 Vacuum Lever |
+   | `P1Button3` | B → `RightButton` | — | Player 1 Vacuum Screen Out |
+   | `P1ButtonStart` | Start → `Button5` | Start Button P1 | Player 1 Start |
+   | `Coin1` / `Coin2` | Coin on gun 1 / 2 → `Button4` | Coin | Coin 1 / Coin 2 |
+
+   P2 rows go to Bridge Mouse 2 the same way. A row labelled *Reload* always
+   gets B and one labelled *Grenade* always gets A, whatever its slot. Operator
+   rows — names starting with Test, Service, Volume or Select (Jurassic Park's
+   test-menu keys, Luigi's Mansion's Select Switch) — and `Button4` and up keep
+   what you bound. The manual route, for reference:
 2. In `UserProfiles\<Game>.xml`, bind the lightguns to the bridge mice. TP's
    controller page cannot capture left/right/middle for a binding and it
    overwrites hand edits, so edit the XML with TP closed:

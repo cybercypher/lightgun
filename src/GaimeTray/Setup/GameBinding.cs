@@ -110,20 +110,33 @@ namespace GaimeTray
         public static bool Running() =>
             Process.GetProcessesByName("TeknoParrotUi").Length > 0;
 
-        // Gun rows by ButtonName -> mouse button on that player's bridge mouse,
-        // the buttons the tray sends (docs/buttons.md): trigger left, B right,
-        // A middle, Coin button 4, Start button 5. A row without a player
-        // (Jurassic Park's single "Coin") goes to gun 1. Operator rows (Test,
-        // Service, Volume, TestMenu) keep whatever the user bound.
-        static readonly (Regex name, string button)[] Rules =
+        // Gun rows by TP's InputMapping, which is the same across games (the
+        // ButtonName labels are not: "Trigger P1" in Jurassic Park is "Player 1
+        // Vacuum Button" in Luigi's Mansion). Each maps to a button on that
+        // player's bridge mouse, the ones the tray sends (docs/buttons.md):
+        // trigger left, A middle, B right, Coin button 4, Start button 5.
+        // The gun has three action buttons, so Button4 and up are left alone.
+        static readonly (Regex mapping, string button)[] Rules =
         {
-            (new Regex(@"^P([12]) Light Gun$"), "None"),
-            (new Regex(@"^Trigger P([12])$"), "LeftButton"),
-            (new Regex(@"^Reload P([12])$"), "RightButton"),
-            (new Regex(@"^Grenades? P([12])$"), "MiddleButton"),
-            (new Regex(@"^Start Button P([12])$"), "Button5"),
-            (new Regex(@"^Coin(?: P([12]))?$"), "Button4"),
+            (new Regex(@"^P([12])LightGun$"), "None"),
+            (new Regex(@"^P([12])Button1$"), "LeftButton"),
+            (new Regex(@"^P([12])Button2$"), "MiddleButton"),
+            (new Regex(@"^P([12])Button3$"), "RightButton"),
+            (new Regex(@"^P([12])ButtonStart$"), "Button5"),
+            (new Regex(@"^Coin([12])$"), "Button4"),
         };
+
+        // A row's label can name what the button does; that beats the slot
+        // default (a game whose reload sits on Button2 still gets B).
+        static string ByName(string name, string fallback) =>
+            Regex.IsMatch(name, @"\bReload\b", RegexOptions.IgnoreCase) ? "RightButton"
+            : Regex.IsMatch(name, @"\bGrenades?\b", RegexOptions.IgnoreCase) ? "MiddleButton"
+            : fallback;
+
+        // Operator rows keep whatever the user bound, even when TP reuses a
+        // player slot for them (Jurassic Park's "TestMenu Up" is P1Button3,
+        // Luigi's Mansion's "Select Switch" is P1Button4).
+        static readonly Regex Operator = new Regex(@"^(Test|Service|Volume|Select)", RegexOptions.IgnoreCase);
 
         // TP refuses a profile with any other RawMouseButton value.
         static readonly HashSet<string> MouseButtons = new HashSet<string>
@@ -140,7 +153,7 @@ namespace GaimeTray
 
         // Player n counts as bound when its Light Gun row is on bridge mouse n.
         static bool LightGunBound(XDocument doc, int player) =>
-            Rows(doc).Any(r => (string)r.Element("ButtonName") == "P" + player + " Light Gun" &&
+            Rows(doc).Any(r => (string)r.Element("InputMapping") == "P" + player + "LightGun" &&
                 BridgePlayer((string)r.Element("RawInputButton")?.Element("DevicePath")) == player);
 
         public static List<Profile> Scan(string tpDir)
@@ -178,11 +191,14 @@ namespace GaimeTray
             foreach (var row in rows)
             {
                 string name = (string)row.Element("ButtonName") ?? "";
-                foreach (var (rx, button) in Rules)
+                string mapping = (string)row.Element("InputMapping") ?? "";
+                if (Operator.IsMatch(name)) continue;
+                foreach (var (rx, slot) in Rules)
                 {
-                    var m = rx.Match(name);
+                    var m = rx.Match(mapping);
                     if (!m.Success) continue;
-                    int iface = m.Groups[1].Success ? m.Groups[1].Value[0] - '1' : 0;
+                    int iface = m.Groups[1].Value[0] - '1';
+                    string button = slot == "None" || slot == "Button4" || slot == "Button5" ? slot : ByName(name, slot);
                     if (!mice.TryGetValue(iface, out var path)) break;
                     if (!MouseButtons.Contains(button)) throw new InvalidOperationException("bad mouse button " + button);
                     SetRow(row, path, button, "G'AIM'E Bridge Mouse " + (iface + 1));
@@ -190,7 +206,7 @@ namespace GaimeTray
                     break;
                 }
             }
-            if (bound.Count == 0) throw new InvalidOperationException("no Light Gun / Trigger rows in this profile");
+            if (bound.Count == 0) throw new InvalidOperationException("no light gun rows (P1LightGun) in this profile");
 
             string api = "unchanged";
             var field = doc.Root.Element("ConfigValues")?.Elements("FieldInformation")
