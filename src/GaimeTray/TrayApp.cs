@@ -55,6 +55,9 @@ namespace GaimeTray
             // Guns click tray windows at their calibrated aim (GunPointer), not
             // through Windows' touch taps (GunTouchFilter drops those).
             Application.AddMessageFilter(new GunTouchFilter(s => _eng.Note(s)));
+            // With Windows touch off, nothing moves the cursor from the guns, so
+            // the cursor guard has nothing to undo (outside a game).
+            RawInputWindow.TouchMovesCursor = !SystemChecks.TouchGateOff();
             _pointer = new GunPointer(_eng);
             _invoker.CreateControl();
             var setupWait = new Thread(() =>

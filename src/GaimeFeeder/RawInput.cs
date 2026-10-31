@@ -71,6 +71,19 @@ namespace GaimeFeeder
         }
         static bool GunActive => Environment.TickCount64 < Volatile.Read(ref _gunActiveUntil);
 
+        // The real mouse moved within the last second: it owns the cursor.
+        static bool MouseActive => Environment.TickCount64 < Volatile.Read(ref _mouseActiveUntil);
+
+        // False when Windows does not turn the guns' touch into cursor movement
+        // (TouchGate = 0, read once at tray start; Windows applies a change only
+        // after sign-out anyway). Then there is nothing to undo, so outside a
+        // game the cursor is left entirely to the mouse. The bridge pin while a
+        // game streams is separate and unaffected.
+        public static volatile bool TouchMovesCursor = true;
+
+        // Pin only when there is something to undo, and never against the mouse.
+        static bool ShouldPin => HaveAnchor && GunActive && !MouseActive && (TouchMovesCursor || _bridgePin);
+
         // While the Pico bridge streams, the absolute mouse owns the cursor and
         // the gun's touch click acts wherever it sits. Hold the pointer at a
         // fixed safe point - top-right, away from the taskbar's Show Desktop
@@ -114,8 +127,7 @@ namespace GaimeFeeder
                 {
                     try
                     {
-                        if (HaveAnchor && GunActive &&
-                            Environment.TickCount64 >= Volatile.Read(ref _mouseActiveUntil))
+                        if (ShouldPin)
                         {
                             if (GetCursorPos(out var p) && (p.X != AnchorX || p.Y != AnchorY))
                                 SetCursorPos(AnchorX, AnchorY);
@@ -138,7 +150,11 @@ namespace GaimeFeeder
         // per gun pointer report; a no-op when the cursor is already there.
         public static void PinCursor()
         {
-            if (!GunActive) return;
+            // This runs on every gun report (up to ~280 Hz). It used to skip the
+            // mouse check the guard thread does, so while a gun tracked it
+            // snapped the cursor back under a moving mouse (reported on a
+            // Surface Book 2, 2026-10-31, even with touch turned off).
+            if (!GunActive || MouseActive || (!TouchMovesCursor && !_bridgePin)) return;
             if (!HaveAnchor)
             {
                 SetSafeAnchor();
