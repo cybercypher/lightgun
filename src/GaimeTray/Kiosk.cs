@@ -217,6 +217,7 @@ namespace GaimeTray
         void Launch()
         {
             _lastBlock = null;
+            if (IsRetroBat) { LaunchRetroBat(); return; }
             string exe = Path.Combine(_cfg.TeknoParrotDir ?? "", SetupConfig.TeknoParrotExe);
             if (!File.Exists(exe)) { Stop("TeknoParrotUi.exe not found — set the folder in the wizard", false); return; }
             if (!File.Exists(Path.Combine(_cfg.TeknoParrotDir, "UserProfiles", _cfg.AutoLaunchProfile)))
@@ -241,6 +242,26 @@ namespace GaimeTray
             string args = "--profile=" + _cfg.AutoLaunchProfile;
             _eng.Note("auto-start: launching \"" + exe + "\" " + args);
             _tp = Process.Start(new ProcessStartInfo(exe, args) { WorkingDirectory = _cfg.TeknoParrotDir, UseShellExecute = false });
+            _launchedAt = DateTime.UtcNow;
+            Enter(Phase.Launching);
+        }
+
+        // RetroBat: start the frontend; it launches the games. The tray watches
+        // emulationstation like a game (restart, exit combo), and the bridge
+        // streams to whichever emulator RetroBat puts in front.
+        void LaunchRetroBat()
+        {
+            string exe = RetroBat.Exe(_cfg.RetroBatDir);
+            if (exe == null || !File.Exists(exe)) { Stop("RetroBat.exe not found — set the RetroBat folder in the wizard", false); return; }
+            if (GameRunning())
+            {
+                _eng.Note("auto-start: RetroBat is already running, watching it");
+                _launchedAt = DateTime.UtcNow;
+                Enter(Phase.Launching);
+                return;
+            }
+            _eng.Note("auto-start: launching \"" + exe + "\"");
+            _tp = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = _cfg.RetroBatDir, UseShellExecute = false });
             _launchedAt = DateTime.UtcNow;
             Enter(Phase.Launching);
         }
@@ -285,7 +306,10 @@ namespace GaimeTray
 
         // ElfLdr2 games run inside BudgieLoader; other loaders run the game's
         // own exe (GamePath in the profile).
+        bool IsRetroBat => _cfg?.AutoLaunchProfile == SetupConfig.RetroBatTarget;
+
         static string GameProcessName(SetupConfig cfg) =>
+            cfg.AutoLaunchProfile == SetupConfig.RetroBatTarget ? RetroBat.FrontendProcess :
             TeknoParrotProfiles.GameProcess(Path.Combine(cfg.TeknoParrotDir ?? "", "UserProfiles", cfg.AutoLaunchProfile ?? ""))
             ?? "BudgieLoader";
 
@@ -295,7 +319,9 @@ namespace GaimeTray
         {
             var procs = Process.GetProcessesByName(_gameProcess).ToList();
             if (_tp != null) { try { if (!_tp.HasExited) procs.Add(_tp); } catch { } }
-            foreach (var p in procs.Concat(Process.GetProcessesByName("TeknoParrotUi")))
+            var extra = Process.GetProcessesByName("TeknoParrotUi").AsEnumerable();
+            if (IsRetroBat) extra = extra.Concat(Process.GetProcessesByName("RetroBat"));
+            foreach (var p in procs.Concat(extra))
             {
                 try
                 {

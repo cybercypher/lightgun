@@ -14,7 +14,8 @@ namespace GaimeTray
     {
         public override string Title => "Games";
 
-        readonly TextBox _tpDir, _dsDir, _games;
+        readonly TextBox _tpDir, _dsDir, _games, _rbDir;
+        Label _rbState;
         readonly Label _dsState, _tpState, _gamesState, _borderState;
         readonly ListView _profiles;
         readonly Button _borderToggle;
@@ -119,6 +120,48 @@ namespace GaimeTray
             _gamesState = Ui.Text("", 450, y + 118, 190, 36, Ui.Dim);
             Controls.AddRange(new Control[] { _games, saveGames, defaults, _gamesState });
 
+            // ---- RetroBat (frontend the tray can start instead of one game)
+            y += 160;
+            Controls.Add(Ui.Text("RetroBat (optional)", 0, y, 300, 22, null, 10, true));
+            Controls.Add(Ui.Text(
+                "The tray can start RetroBat instead of one game (Auto-start page, main window game bar). " +
+                "Link its TeknoParrot folder to the one above so bindings and borders are shared.",
+                0, y + 22, 640, 36, Ui.Dim));
+            _rbDir = Ui.Box(w.Config.RetroBatDir, 0, y + 62, 440);
+            var rbBrowse = Ui.Btn("Browse…", 450, y + 59, 90);
+            rbBrowse.Click += (s, e) => Browse(_rbDir, SetupConfig.RetroBatExe);
+            var rbFind = Ui.Btn("Find", 548, y + 59, 90);
+            rbFind.Click += (s, e) => { _rbDir.Text = SetupConfig.DetectRetroBat() ?? _rbDir.Text; Refresh_(); };
+            _rbState = Ui.Text("", 0, y + 94, 640, 22, Ui.Dim);
+            var rbLink = Ui.Btn("Link TeknoParrot", 0, y + 120, 150);
+            rbLink.Click += (s, e) =>
+            {
+                try
+                {
+                    string msg = RetroBat.LinkTeknoParrot(_rbDir.Text.Trim(), _tpDir.Text.Trim());
+                    Wizard.Engine.Note("setup: RetroBat " + msg);
+                    State(_rbState, Check.Ok, msg);
+                }
+                catch (Exception ex) { State(_rbState, Check.Fail, ex.Message); }
+            };
+            new ToolTip().SetToolTip(rbLink, "Makes RetroBat\\emulators\\teknoparrot a link (junction) to the TeknoParrot folder above, so there is one copy.");
+            var rbEmus = Ui.Btn("Add emulators to bridge", 160, y + 120, 180);
+            rbEmus.Click += (s, e) =>
+            {
+                var names = RetroBat.EmulatorProcesses(_rbDir.Text.Trim());
+                try
+                {
+                    int n = PicoOutput.EnsureGames(names);
+                    Wizard.Engine.Note("setup: RetroBat emulators added to the bridge games: " + n + " of " + names.Count);
+                    _games.Text = string.Join("\r\n", PicoOutput.Games());
+                    State(_rbState, Check.Ok, n + " new emulator programs added (" + names.Count + " found) — the bridge streams while one is in front");
+                }
+                catch (Exception ex) { State(_rbState, Check.Fail, ex.Message); }
+            };
+            new ToolTip().SetToolTip(rbEmus, "Adds every program under RetroBat\\emulators to 'Games that turn the bridge on'.");
+            Controls.AddRange(new Control[] { _rbDir, rbBrowse, rbFind, _rbState, rbLink, rbEmus });
+            _rbDir.Leave += (s, e) => Refresh_();
+
             _dsDir.Leave += (s, e) => Refresh_();
             _tpDir.Leave += (s, e) => Refresh_();
         }
@@ -128,6 +171,7 @@ namespace GaimeTray
             // Fill empty paths from the usual install places, once per visit.
             if (_dsDir.Text.Trim().Length == 0) _dsDir.Text = SetupConfig.DetectDemulShooter() ?? "";
             if (_tpDir.Text.Trim().Length == 0) _tpDir.Text = SetupConfig.DetectTeknoParrot() ?? "";
+            if (_rbDir.Text.Trim().Length == 0) _rbDir.Text = SetupConfig.DetectRetroBat() ?? "";
             _games.Text = string.Join("\r\n", PicoOutput.Games());
             _gamesState.Text = File.Exists(AppPaths.BridgeProcesses) ? "from bridge-processes.txt" : "built-in list";
             Refresh_();
@@ -148,6 +192,17 @@ namespace GaimeTray
             var cfg = Wizard.Config;
             cfg.DemulShooterDir = _dsDir.Text.Trim();
             cfg.TeknoParrotDir = _tpDir.Text.Trim();
+            cfg.RetroBatDir = _rbDir.Text.Trim();
+            if (cfg.RetroBatDir.Length == 0) State(_rbState, Check.Info, "not set — skip if you do not use RetroBat");
+            else if (!RetroBat.Valid(cfg.RetroBatDir)) State(_rbState, Check.Fail, "no RetroBat.exe in that folder");
+            else
+            {
+                var tpIn = RetroBat.TeknoParrotDir(cfg.RetroBatDir);
+                var link = new DirectoryInfo(Path.Combine(cfg.RetroBatDir, "emulators", "teknoparrot"));
+                State(_rbState, Check.Ok, tpIn == null ? "found — no TeknoParrot in it yet: press Link TeknoParrot"
+                    : link.Exists && link.LinkTarget != null ? "found — TeknoParrot linked to " + link.LinkTarget
+                    : "found — has its own TeknoParrot copy (" + tpIn + "); bindings and borders there are separate");
+            }
 
             string ini = DemulShooterBinding.ConfigPath(cfg.DemulShooterDir);
             if (cfg.DemulShooterDir.Length == 0) State(_dsState, Check.Info, "not set — skip if you do not use DemulShooter");

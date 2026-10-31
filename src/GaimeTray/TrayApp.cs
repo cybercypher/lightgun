@@ -29,6 +29,7 @@ namespace GaimeTray
             var menu = new ContextMenuStrip();
             menu.Items.Add("Show", null, (s, e) => ShowWindow());
             menu.Items.Add("Setup…", null, (s, e) => SetupWizard.Open(_eng));
+            menu.Items.Add("Fix touchscreen", null, (s, e) => { ShowWindow(); _win?.FixTouch(); });
             menu.Items.Add("Start game now", null, (s, e) => _kiosk.StartNow());
             var stopAuto = menu.Items.Add("Stop auto-restart", null, (s, e) => _kiosk.Stop("tray menu", false));
             menu.Opening += (s, e) => stopAuto.Enabled = _kiosk.Active;

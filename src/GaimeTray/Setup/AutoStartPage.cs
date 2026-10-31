@@ -104,6 +104,7 @@ namespace GaimeTray
             var cfg = Wizard.Config;
             _game.Items.Clear();
             var profiles = TeknoParrotProfiles.Scan(cfg.TeknoParrotDir);
+            if (RetroBat.Valid(cfg.RetroBatDir)) _game.Items.Add(new Item(null));
             foreach (var p in profiles) _game.Items.Add(new Item(p));
             var current = _game.Items.Cast<Item>().FirstOrDefault(i =>
                 string.Equals(i.FileName, cfg.AutoLaunchProfile, StringComparison.OrdinalIgnoreCase));
@@ -132,7 +133,12 @@ namespace GaimeTray
             cfg.RestartOnExit = _restart.Checked;
             cfg.ExitComboSeconds = (int)_combo.Value;
             try { cfg.Save(); } catch { }
-            if (item != null)
+            if (item != null && item.Profile == null)
+            {
+                _gameNote.ForeColor = Ui.Dim;
+                _gameNote.Text = "starts RetroBat; it launches the games";
+            }
+            else if (item != null)
             {
                 bool both = item.Profile.P1 && item.Profile.P2;
                 _gameNote.ForeColor = both ? Ui.Dim : Ui.Amber;
@@ -228,9 +234,9 @@ namespace GaimeTray
         sealed class Item
         {
             public readonly TeknoParrotProfiles.Profile Profile;
-            public string FileName => Path.GetFileName(Profile.File);
-            public Item(TeknoParrotProfiles.Profile p) { Profile = p; }
-            public override string ToString() => Profile.Game;
+            public string FileName => Profile == null ? SetupConfig.RetroBatTarget : Path.GetFileName(Profile.File);
+            public Item(TeknoParrotProfiles.Profile p) { Profile = p; }   // null = RetroBat
+            public override string ToString() => Profile == null ? "RetroBat (frontend)" : Profile.Game;
         }
     }
 }

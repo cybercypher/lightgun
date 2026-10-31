@@ -310,6 +310,35 @@ game running) and **Start game now**. The next start of the tray resumes
 auto-start. Holding Start + Coin also sends both buttons to the game for those
 seconds.
 
+## 8b. RetroBat (optional)
+
+GaimeTray can start RetroBat instead of one game; RetroBat then launches the
+games, and the tray keeps turning the guns into the bridge mice.
+
+1. Wizard → Games → **RetroBat**: set its folder (**Find** looks in the usual
+   places).
+2. **Link TeknoParrot** makes `RetroBat\emulators\teknoparrot` a link
+   (junction) to the TeknoParrot folder above, so RetroBat uses the same
+   install — the same profiles, gun bindings and ReShade borders. It refuses if
+   that folder already holds a separate TeknoParrot copy.
+3. **Add emulators to bridge** puts every program under `RetroBat\emulators`
+   on the bridge's game list, so the guns aim in whichever emulator RetroBat
+   puts in front. TeknoParrot games still come from **Bind to guns**.
+4. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
+   game bar. The tray watches `emulationstation`: if RetroBat closes it is
+   started again; Start + Coin on a gun closes it.
+
+Not known yet (test on the rig): RetroBat "automatically configures" controls
+for TeknoParrot games and guns, and may rewrite the gun rows in the profiles
+when it launches a game — if a game ignores the guns after a RetroBat launch,
+run **Bind to guns** again and look for RetroBat's per-game option to keep the
+existing controls. RetroBat's own Sinden-style border is meant for Sinden
+guns; with our ReShade border installed, leave RetroBat's off to avoid two.
+
+**Touchscreen off?** The main window's Log tab and the tray menu have **Fix
+touchscreen**: it turns Windows touch back on (`TouchGate = 1`) and offers to
+sign out.
+
 ## 9. Troubleshooting
 
 | Symptom | Cause |

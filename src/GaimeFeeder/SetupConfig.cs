@@ -13,6 +13,7 @@ namespace GaimeFeeder
     {
         public string TeknoParrotDir { get; set; } = "";
         public string DemulShooterDir { get; set; } = "";
+        public string RetroBatDir { get; set; } = "";
         public bool Completed { get; set; }
         // White reference border on (tray screens + ReShade in games).
         public bool BorderOn { get; set; } = true;
@@ -76,6 +77,14 @@ namespace GaimeFeeder
 
         public const string TeknoParrotExe = "TeknoParrotUi.exe";
         public const string DemulShooterExe = "DemulShooter.exe";
+        public const string RetroBatExe = "RetroBat.exe";
+
+        // AutoLaunchProfile value meaning "start RetroBat" instead of one
+        // TeknoParrot profile.
+        public const string RetroBatTarget = "RetroBat";
+
+        public static string DetectRetroBat() =>
+            Detect(RetroBatExe, "RetroBat", "retrobat");
 
         public static string DetectTeknoParrot() =>
             Detect(TeknoParrotExe, "teknoparrot", "TeknoParrot", "TeknoParrotUI");

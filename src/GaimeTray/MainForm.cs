@@ -184,6 +184,7 @@ namespace GaimeTray
             var cfg = SetupConfig.Load();
             string keep = (_game.SelectedItem as GameItem)?.FileName ?? cfg.AutoLaunchProfile;
             _game.Items.Clear();
+            if (RetroBat.Valid(cfg.RetroBatDir)) _game.Items.Add(new GameItem(null));
             foreach (var p in TeknoParrotProfiles.Scan(cfg.TeknoParrotDir))
                 _game.Items.Add(new GameItem(p));
             _game.SelectedItem = _game.Items.Cast<GameItem>().FirstOrDefault(i =>
@@ -194,8 +195,8 @@ namespace GaimeTray
         {
             readonly TeknoParrotProfiles.Profile _p;
             public GameItem(TeknoParrotProfiles.Profile p) { _p = p; }
-            public string FileName => Path.GetFileName(_p.File);
-            public override string ToString() => _p.Game + (_p.P1 && _p.P2 ? "" : "  (guns not bound)");
+            public string FileName => _p == null ? SetupConfig.RetroBatTarget : Path.GetFileName(_p.File);
+            public override string ToString() => _p == null ? "RetroBat (frontend)" : _p.Game + (_p.P1 && _p.P2 ? "" : "  (guns not bound)");
         }
 
         TabPage MkLogPage()
@@ -225,9 +226,36 @@ namespace GaimeTray
             setupBtn.Click += (s, e) => SetupWizard.Open(_eng);
             new ToolTip().SetToolTip(setupBtn,
                 "Step-by-step: system check, gun serials and players, calibration order, game bindings");
-            bar.Controls.AddRange(new Control[] { clear, folder, snBtn, setupBtn });
+            var touchBtn = MkBtn("Fix touchscreen", 620, 4);
+            touchBtn.Click += (s, e) => FixTouch();
+            new ToolTip().SetToolTip(touchBtn, "Turns Windows touch input back on (TouchGate = 1) if it was turned off; then sign out and in");
+            bar.Controls.AddRange(new Control[] { clear, folder, snBtn, setupBtn, touchBtn });
             p.Controls.AddRange(new Control[] { _log, bar });
             return p;
+        }
+
+        // TouchGate = 0 turns off touch for every touchscreen (a Surface's own
+        // screen included); this puts it back.
+        public void FixTouch()
+        {
+            if (!SystemChecks.TouchGateOff())
+            {
+                MessageBox.Show(this, "Touch input is already on in Windows' settings. If the touchscreen still doesn't respond, sign out and back in.",
+                    "Fix touchscreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            try
+            {
+                SystemChecks.SetTouchGate(false);
+                _eng.Note("touch input turned back on (TouchGate = 1); takes effect after sign-out");
+                if (MessageBox.Show(this, "Touch input is turned back on. Windows applies it after you sign out and back in.\r\n\r\nSign out now?",
+                        "Fix touchscreen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    Process.Start(new ProcessStartInfo("shutdown.exe", "/l") { UseShellExecute = false, CreateNoWindow = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Could not change the setting: " + ex.Message, "Fix touchscreen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         TabPage MkCapPage()

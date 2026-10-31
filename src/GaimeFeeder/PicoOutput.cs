@@ -277,6 +277,18 @@ namespace GaimeFeeder
         // Make sure one game process unlocks the stream (setup wizard, after
         // binding a game). Writes bridge-processes.txt from the current list
         // when it does not exist yet. True when the list changed.
+        public static int EnsureGames(IEnumerable<string> names)
+        {
+            var add = names.Where(n => !string.IsNullOrWhiteSpace(n) && !_games.Contains(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (add.Count == 0) return 0;
+            var list = Games();
+            list.AddRange(add);
+            File.WriteAllLines(AppPaths.BridgeProcesses,
+                new[] { "# Game processes that turn the Pico bridge on (setup wizard)." }.Concat(list));
+            ReloadGames();
+            return add.Count;
+        }
+
         public static bool EnsureGame(string name)
         {
             if (string.IsNullOrWhiteSpace(name) || _games.Contains(name)) return false;
