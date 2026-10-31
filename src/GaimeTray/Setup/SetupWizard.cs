@@ -119,6 +119,7 @@ namespace GaimeTray
                 // does not reopen on every start; the tray menu brings it back.
                 try { Config.Save(); } catch { }
                 Engine.AutoCalibrate = true;
+                Engine.StartButtonCalibrates = false;
             };
             Engine.AutoCalibrate = false;
         }
@@ -127,6 +128,9 @@ namespace GaimeTray
         {
             if (i < 0 || i >= _pages.Length) return;
             _index = i;
+            // Only the Calibrate page turns the gun's Start button into
+            // "calibrate this gun"; every page change resets it.
+            Engine.StartButtonCalibrates = false;
             _host.Controls.Clear();
             var page = _pages[i];
             page.Dock = DockStyle.Fill;

@@ -29,7 +29,7 @@ namespace GaimeTray
         public CalibratePage(SetupWizard w) : base(w)
         {
             Controls.Add(Ui.Text(
-                "Do each gun in this order. 1 · Box Cal: aim at each of the 8 lime targets and pull 3 times (Esc cancels). " +
+                "No mouse needed: press Start on a gun to run all three steps for it. Do each gun in this order. 1 · Box Cal: aim at each of the 8 lime targets and pull 3 times (Esc cancels). " +
                 "2 · Host grid: 9 targets, 3 pulls each, standing where you will play. 3 · Test: shoot 20–40 shots; " +
                 "the log shows the miss, under ~60 px at 4K is good. A Box Cal always needs a new host grid after it.",
                 0, 0, 650, 72, Ui.Dim));
@@ -41,7 +41,11 @@ namespace GaimeTray
             Controls.AddRange(new Control[] { _border, _borderBtn, _list, _empty });
         }
 
-        public override void ShowPage() => Tick();
+        public override void ShowPage()
+        {
+            Wizard.Engine.StartButtonCalibrates = true;
+            Tick();
+        }
 
         public override void Tick()
         {

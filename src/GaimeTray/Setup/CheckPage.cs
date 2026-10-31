@@ -42,16 +42,23 @@ namespace GaimeTray
             {
                 try { Process.Start(new ProcessStartInfo("ms-settings:display") { UseShellExecute = true }); } catch { }
             };
-            var touch = Ui.Btn("Stop guns moving the cursor", 300, fy + 64, 210);
+            _touch = Ui.Btn("", 300, fy + 64, 210);
+            var touch = _touch;
             touch.Click += (s, e) =>
             {
                 try
                 {
-                    SystemChecks.SetTouchGateOff();
-                    Wizard.Engine.Note("setup: TouchGate = 0 (Windows stops moving the cursor from the guns after sign-out)");
+                    bool turnOff = !SystemChecks.TouchGateOff();
+                    if (turnOff && MessageBox.Show(this,
+                            "This turns off touch for EVERY touchscreen on this PC, including a laptop's or Surface's own screen, " +
+                            "not just the guns. The tray still reads the guns.\r\n\r\n" +
+                            "You don't need it to calibrate: on the Calibrate page, press Start on a gun.\r\n\r\nTurn touch off anyway?",
+                            "Touch input", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                        return;
+                    SystemChecks.SetTouchGate(turnOff);
+                    Wizard.Engine.Note("setup: TouchGate = " + (turnOff ? "0 (touch off for every touchscreen)" : "1 (touch back on)") + ", after sign-out");
                     _flashResult.ForeColor = Ui.Lime;
-                    _flashResult.Text = "Done. Sign out of Windows and back in for it to take effect. " +
-                        "Undo: the same setting set to 1 (HKCU\\Software\\Microsoft\\Wisp\\Touch, TouchGate).";
+                    _flashResult.Text = "Done. Sign out of Windows and back in for it to take effect.";
                 }
                 catch (Exception ex)
                 {
@@ -61,15 +68,19 @@ namespace GaimeTray
                 Tick();
             };
             new ToolTip().SetToolTip(touch, "Windows treats each gun as a touchscreen and moves the cursor where it points. " +
-                "This per-user setting (no admin) stops that; the tray still reads the guns.");
+                "Turning touch off stops that, but for every touchscreen on the PC, including a built-in one.");
             _flashResult = Ui.Text("", 0, fy + 102, 640, 40, Ui.Lime);
             Controls.AddRange(new Control[] { flash, display, touch, _flashResult });
         }
+
+        Button _touch;
 
         public override void ShowPage() => Tick();
 
         public override void Tick()
         {
+            if (_touch != null)
+                _touch.Text = SystemChecks.TouchGateOff() ? "Turn touch back on" : "Turn touch off (all screens)";
             var all = SystemChecks.All(Wizard.Engine);
             for (int i = 0; i < _rows.Count && i < all.Count; i++)
             {

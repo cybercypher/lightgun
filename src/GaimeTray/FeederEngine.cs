@@ -47,6 +47,12 @@ namespace GaimeTray
         // Calibrate (all steps): the gun whose Box Cal -> host grid -> test run
         // is in progress, so each step opens the next without the mouse.
         string _chainSn;
+
+        // Set by the wizard's Calibrate page while it is showing: a gun's
+        // Start button then runs All steps for that gun, so calibrating needs
+        // no mouse (Windows moves the cursor wherever a gun points).
+        public bool StartButtonCalibrates { get; set; }
+        DateTime _lastStartCal = DateTime.MinValue;
         CalibrationWindow _calib;
         string _calibSn;
         ShootingGallery _gallery;
@@ -424,6 +430,14 @@ namespace GaimeTray
                     case 0x43: g.BtnCoin = down; break;
                     case 0x51: g.BtnStart = down; break;
                     default: return;
+                }
+                if (vkey == 0x51 && down && StartButtonCalibrates && _gallery == null && _calib == null &&
+                    (DateTime.UtcNow - _lastStartCal).TotalSeconds > 2)
+                {
+                    _lastStartCal = DateTime.UtcNow;
+                    Emit(g.Label + ": Start pressed on the Calibrate page — all steps.");
+                    CalibrateAll(sn);
+                    return;
                 }
                 _gallery?.OnGunKey(g, vkey, down);
                 Feed(g);

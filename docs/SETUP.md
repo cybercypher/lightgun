@@ -148,7 +148,9 @@ The median miss is the number that matters; anything under ~60 px at 4K is
 inside a normal target. If a gun is much worse than that, redo 4b for that gun
 (and 4a first if you changed anything on the gun side).
 
-**One click for all three steps:** the Calibrate page's **All steps** button
+**No mouse:** while the Calibrate page is open, press **Start** on a gun — it
+runs all three steps for that gun. **One click for all three steps:** the
+Calibrate page's **All steps** button
 runs Box Cal, opens the host grid by itself as soon as Box Cal reaches the gun,
 then reopens the gallery for the test shots — driven by the gun's trigger, so
 the mouse is not needed in between. Esc stops the run.
@@ -316,7 +318,7 @@ seconds.
 | Cards appear but aim never moves | the gun is not reporting the digitizer; check Device Manager for the HID digitizer interface |
 | Aim works in the gallery, not in the game | the game is reading a different device. TP: P1/P2 Light Gun must be the bridge mice, Input API = RawInput |
 | Gun 2 does nothing in a game | its TP bindings are unbound (see §5.4), or the game only supports one player |
-| The mouse can't click while a gun points at the screen (calibration, wizard) | Windows moves the cursor wherever a gun points (it treats the gun as a touchscreen). System check → **Stop guns moving the cursor** sets `TouchGate = 0` for your user; sign out and in. The tray still reads the guns. |
+| The mouse can't click while a gun points at the screen (calibration, wizard) | Windows moves the cursor wherever a gun points (it treats the gun as a touchscreen). Calibrate without the mouse: on the Calibrate page press **Start** on a gun. `TouchGate = 0` (System check → **Turn touch off**) also stops it, but turns off touch for **every** touchscreen, including a laptop's or Surface's own — undo with **Turn touch back on** and a sign-out. |
 | A game takes long to start from the tray | the Log tab has `auto-start: … (+N.N s)` lines for each stage. **Start game** launches at once; auto-start at boot waits up to 20 s for the bridge and one gun. |
 | Cursor jumps around while nothing is running | that is the gun's digitizer moving the Windows cursor; the tray only pins it while a gun is locked. The bridge does not stream on the desktop. |
 | Aim drifts over a session | IMU drift with the camera path not locking; redo the PC-side grid (§4b) and check the border is on |

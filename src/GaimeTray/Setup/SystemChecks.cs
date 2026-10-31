@@ -88,8 +88,11 @@ namespace GaimeTray
         // wherever it points; the tray can only fight that (RawInput cursor
         // guard), which leaves the real mouse unusable while a gun is aimed at
         // the screen. TouchGate = 0 (per user, no admin) stops Windows from
-        // turning touch input into pointer movement; the tray still reads the
-        // guns through RawInput. Takes effect after signing out and in.
+        // turning touch input into pointer movement — for EVERY touchscreen,
+        // including a laptop's or Surface's own (found on a Surface Book 2,
+        // 2026-10-31). The tray still reads the guns through RawInput. Takes
+        // effect after signing out and in. Calibration does not need it: the
+        // Calibrate page starts on the gun's Start button.
         const string TouchKey = @"Software\Microsoft\Wisp\Touch";
 
         public static bool TouchGateOff()
@@ -102,17 +105,19 @@ namespace GaimeTray
             catch { return false; }
         }
 
-        public static void SetTouchGateOff()
+        // off = true: TouchGate 0 (touch no longer moves the pointer anywhere).
+        public static void SetTouchGate(bool off)
         {
             using (var k = Registry.CurrentUser.CreateSubKey(TouchKey))
-                k.SetValue("TouchGate", 0, RegistryValueKind.DWord);
+                k.SetValue("TouchGate", off ? 0 : 1, RegistryValueKind.DWord);
         }
 
         public static CheckResult TouchCursor() =>
             TouchGateOff()
-                ? new CheckResult(Check.Ok, "Gun cursor", "Windows does not move the mouse cursor from the guns (TouchGate = 0)")
-                : new CheckResult(Check.Warn, "Gun cursor",
-                    "Windows moves the mouse cursor wherever a gun points, so the mouse fights the gun — press Stop guns moving the cursor, then sign out and in");
+                ? new CheckResult(Check.Warn, "Touch input",
+                    "touch is OFF for every touchscreen on this PC, including a built-in one (TouchGate = 0) — Turn touch back on, then sign out and in")
+                : new CheckResult(Check.Info, "Touch input",
+                    "Windows moves the cursor where a gun points; calibrate without the mouse — press Start on a gun on the Calibrate page");
 
         public static CheckResult Feeding(FeederEngine eng) =>
             eng.Feeding
