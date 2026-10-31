@@ -25,17 +25,18 @@ namespace GaimeTray
         static SetupWizard _open;
 
         // One wizard at a time (tray menu, Log tab, first run).
-        public static void Open(FeederEngine eng)
+        public static SetupWizard Open(FeederEngine eng)
         {
             if (_open != null && !_open.IsDisposed)
             {
                 _open.WindowState = FormWindowState.Normal;
                 _open.Activate();
-                return;
+                return _open;
             }
             _open = new SetupWizard(eng);
             _open.FormClosed += (s, e) => _open = null;
             _open.Show();
+            return _open;
         }
 
         // First start of this install: no setup.json yet.

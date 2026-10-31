@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -52,6 +53,32 @@ namespace GaimeTray
         // Start button then runs All steps for that gun, so calibrating needs
         // no mouse (Windows moves the cursor wherever a gun points).
         public bool StartButtonCalibrates { get; set; }
+
+        // Trigger pressed while no calibration or gallery is reading the guns
+        // (GunPointer clicks tray windows with it), and whether that is now.
+        public event Action<string> GunUiPress;
+        public bool UiFree => _calib == null && _gallery == null;
+
+        // Where a gun points on the primary screen: through its host
+        // calibration, or the gun's own 0..10000 range before it has one (so
+        // the first Box Cal can be started with the gun).
+        public bool GunScreenPoint(string sn, out Point p)
+        {
+            p = Point.Empty;
+            GunState g;
+            lock (_guns) if (!_guns.TryGetValue(sn, out g)) return false;
+            var scr = Screen.PrimaryScreen.Bounds;
+            double fx, fy;
+            if (g.Calib != null)
+            {
+                var (sx, sy, _) = g.Calib.Map(g.RawX, g.RawY);
+                fx = sx / Math.Max(1.0, g.Calib.ScreenW - 1);
+                fy = sy / Math.Max(1.0, g.Calib.ScreenH - 1);
+            }
+            else { fx = Math.Clamp(g.RawX / 10000.0, 0, 1); fy = Math.Clamp(g.RawY / 10000.0, 0, 1); }
+            p = new Point(scr.X + (int)Math.Round(fx * (scr.Width - 1)), scr.Y + (int)Math.Round(fy * (scr.Height - 1)));
+            return true;
+        }
         DateTime _lastStartCal = DateTime.MinValue;
         CalibrationWindow _calib;
         string _calibSn;
@@ -409,6 +436,7 @@ namespace GaimeTray
                     }
                     if (sn == _calibSn) _calib.TriggerSample();
                 }
+                if (pressed && UiFree) GunUiPress?.Invoke(sn);
                 if (g.Calib == null) return;
                 if (g.TriggerDown != was)
                     Emit(g.Label + ": trigger " + (g.TriggerDown ? "DOWN" : "UP") +

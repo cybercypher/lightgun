@@ -60,6 +60,24 @@ namespace GaimeTray
             return "linked " + link + " -> " + tpDir;
         }
 
+        // A "game" in RetroBat's Windows system (roms\windows, .bat accepted)
+        // that opens this tray's setup wizard: `GaimeTray.exe --setup` asks the
+        // running tray to open it and waits until it closes, so RetroBat waits
+        // too. RetroBat shows it after its game lists are updated.
+        public static string AddSetupEntry(string retroBatDir)
+        {
+            if (!Valid(retroBatDir)) throw new InvalidOperationException("set the RetroBat folder first");
+            string exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe) || !exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("run the installed GaimeTray.exe to add the entry");
+            var dir = Path.Combine(retroBatDir, "roms", "windows");
+            Directory.CreateDirectory(dir);
+            var bat = Path.Combine(dir, "GaimeTray Setup.bat");
+            File.WriteAllText(bat, "@echo off\r\nrem Opens the G'AIM'E lightgun setup (GaimeTray). Written by the tray's setup wizard.\r\n" +
+                "\"" + exe + "\" --setup\r\n");
+            return "added " + bat + " — in RetroBat, update the game lists to see it under Windows";
+        }
+
         // Programs that are installers, updaters or helpers, not games.
         static readonly Regex NotAGame = new Regex(
             // TeknoParrot's UI and loader are not games (its games are added by

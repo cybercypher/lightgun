@@ -159,7 +159,19 @@ namespace GaimeTray
                 catch (Exception ex) { State(_rbState, Check.Fail, ex.Message); }
             };
             new ToolTip().SetToolTip(rbEmus, "Adds every program under RetroBat\\emulators to 'Games that turn the bridge on'.");
-            Controls.AddRange(new Control[] { _rbDir, rbBrowse, rbFind, _rbState, rbLink, rbEmus });
+            var rbSetup = Ui.Btn("Add Setup to RetroBat", 350, y + 120, 180);
+            rbSetup.Click += (s, e) =>
+            {
+                try
+                {
+                    string msg = RetroBat.AddSetupEntry(_rbDir.Text.Trim());
+                    Wizard.Engine.Note("setup: RetroBat " + msg);
+                    State(_rbState, Check.Ok, msg);
+                }
+                catch (Exception ex) { State(_rbState, Check.Fail, ex.Message); }
+            };
+            new ToolTip().SetToolTip(rbSetup, "Adds 'GaimeTray Setup' to RetroBat's Windows games: launching it opens this wizard, and RetroBat waits until it closes.");
+            Controls.AddRange(new Control[] { _rbDir, rbBrowse, rbFind, _rbState, rbLink, rbEmus, rbSetup });
             _rbDir.Leave += (s, e) => Refresh_();
 
             _dsDir.Leave += (s, e) => Refresh_();

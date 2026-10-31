@@ -1,5 +1,7 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
@@ -13,6 +15,13 @@ namespace GaimeTray
         readonly NotifyIcon _tray;
         readonly FeederEngine _eng = new FeederEngine();
         readonly Kiosk _kiosk;
+        readonly GunPointer _pointer;
+        // `GaimeTray.exe --setup` (RetroBat's entry) signals OpenEvent; the tray
+        // opens the wizard and signals ClosedEvent when it closes.
+        public const string OpenEvent = "GaimeTray.OpenSetup", ClosedEvent = "GaimeTray.SetupClosed";
+        readonly EventWaitHandle _openEvt = new EventWaitHandle(false, EventResetMode.AutoReset, OpenEvent);
+        readonly EventWaitHandle _closedEvt = new EventWaitHandle(false, EventResetMode.AutoReset, ClosedEvent);
+        readonly Control _invoker = new Control();
         MainForm _win;
         bool _exiting;
         bool _told;
@@ -43,6 +52,20 @@ namespace GaimeTray
             {
                 try { _tray.ShowBalloonTip(3000, t, x, ToolTipIcon.Info); } catch { }
             };
+            // Guns click tray windows at their calibrated aim (GunPointer), not
+            // through Windows' touch taps (GunTouchFilter drops those).
+            Application.AddMessageFilter(new GunTouchFilter(s => _eng.Note(s)));
+            _pointer = new GunPointer(_eng);
+            _invoker.CreateControl();
+            var setupWait = new Thread(() =>
+            {
+                while (true)
+                {
+                    _openEvt.WaitOne();
+                    try { _invoker.BeginInvoke(new Action(OpenSetupForCaller)); } catch { }
+                }
+            }) { IsBackground = true, Name = "SetupRequests" };
+            setupWait.Start();
             _kiosk = new Kiosk(_eng);
             _kiosk.Balloon += (t, x) =>
             {
@@ -130,6 +153,17 @@ namespace GaimeTray
             }
         }
 
+        // Opened from RetroBat: in front of its fullscreen menu until closed,
+        // then tell the waiting `--setup` process so RetroBat carries on.
+        void OpenSetupForCaller()
+        {
+            var w = SetupWizard.Open(_eng);
+            w.TopMost = true;
+            w.Activate();
+            w.FormClosed += (s, e) => { try { _closedEvt.Set(); } catch { } };
+            _eng.Note("setup: opened from another program (--setup)");
+        }
+
         void ToggleWindow()
         {
             if (_win == null || _win.IsDisposed || !_win.Visible) ShowWindow();
@@ -170,9 +204,44 @@ namespace GaimeTray
             catch { }
         }
 
+        [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
+
+        // `GaimeTray.exe --setup`: what RetroBat runs. Ask the running tray to
+        // open the setup wizard (start the tray first if it isn't running),
+        // then wait until the wizard closes, so RetroBat waits like for a game.
+        static void SetupHelper()
+        {
+            if (!EventWaitHandle.TryOpenExisting(TrayContext.OpenEvent, out var open))
+            {
+                try { Process.Start(new ProcessStartInfo(Environment.ProcessPath) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory }); }
+                catch { }
+                var until = DateTime.UtcNow.AddSeconds(30);
+                while (DateTime.UtcNow < until && !EventWaitHandle.TryOpenExisting(TrayContext.OpenEvent, out open))
+                    Thread.Sleep(250);
+                if (open == null)
+                {
+                    MessageBox.Show("GaimeTray did not start.", "G'AIM'E setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+            EventWaitHandle.TryOpenExisting(TrayContext.ClosedEvent, out var closed);
+            AllowSetForegroundWindow(-1); // let the tray put the wizard in front
+            open.Set();
+            // Done when the wizard closes, or when the tray goes away.
+            while (closed != null && !closed.WaitOne(1000))
+                if (Process.GetProcessesByName("GaimeTray").Length < 2) break;
+        }
+
         [STAThread]
         static void Main()
         {
+            foreach (var a in Environment.GetCommandLineArgs())
+                if (string.Equals(a, "--setup", StringComparison.OrdinalIgnoreCase))
+                {
+                    Application.EnableVisualStyles();
+                    SetupHelper();
+                    return;
+                }
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (s, e) =>
             {

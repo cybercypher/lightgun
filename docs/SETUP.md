@@ -106,7 +106,7 @@ ReShade border in games together, and is kept in `setup.json`. Every Box Cal
 and host grid records the border state it was made under; after a change the
 Calibrate page and the gun card mark each gun **full recalibration** until it
 has a new Box Cal and grid. Box Cal and the grid always start with the
-configured border, and a **V** / **B** test toggle ends when the gallery or the
+configured border, and a **V** test toggle ends when the gallery or the
 grid closes. If the border was toggled during a run, that run is flagged.
 
 ### 4a. Gun-side: Box Cal (once per gun, redo whenever you like)
@@ -310,6 +310,18 @@ game running) and **Start game now**. The next start of the tray resumes
 auto-start. Holding Start + Coin also sends both buttons to the game for those
 seconds.
 
+## 8a. Using the tray with the guns only
+
+While a GaimeTray window is in front (main window, setup wizard), each gun
+shows a crosshair at its calibrated aim (green P1, blue P2) and the trigger
+clicks what is under it: buttons, checkboxes, list rows, tabs, the wizard's
+page list; a drop-down steps to its next choice per pull. Before a gun has a
+host calibration the crosshair follows its own Box Cal range. Windows' own
+touch taps from the guns are ignored in tray windows (they landed in the wrong
+place — that is what hit the grid's Cancel button). In the calibration grid,
+the gun's **Start** cancels, **V** toggles the border (not B: the gun's B
+button sends B), and Cancel sits between the left and middle targets.
+
 ## 8b. RetroBat (optional)
 
 GaimeTray can start RetroBat instead of one game; RetroBat then launches the
@@ -324,7 +336,11 @@ games, and the tray keeps turning the guns into the bridge mice.
 3. **Add emulators to bridge** puts every program under `RetroBat\emulators`
    on the bridge's game list, so the guns aim in whichever emulator RetroBat
    puts in front. TeknoParrot games still come from **Bind to guns**.
-4. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
+4. **Add Setup to RetroBat** writes `roms\windows\GaimeTray Setup.bat`; after
+   RetroBat updates its game lists, *GaimeTray Setup* under Windows opens this
+   wizard (in front of RetroBat), and RetroBat waits until it is closed.
+   (It runs `GaimeTray.exe --setup`, which starts the tray first if needed.)
+5. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
    game bar. The tray watches `emulationstation`: if RetroBat closes it is
    started again; Start + Coin on a gun closes it.
 
