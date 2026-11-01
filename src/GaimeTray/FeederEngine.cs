@@ -57,6 +57,9 @@ namespace GaimeTray
         // Trigger pressed while no calibration or gallery is reading the guns
         // (GunPointer clicks tray windows with it), and whether that is now.
         public event Action<string> GunUiPress;
+        // A gun's button changed (serial, vkey 0x20 A / 0x42 B / 0x43 Coin /
+        // 0x51 Start, down). RetroBatNav turns these into RetroBat's keys.
+        public event Action<string, int, bool> GunKey;
         public bool UiFree => _calib == null && _gallery == null;
 
         // Where a gun points on the primary screen: through its host
@@ -459,6 +462,7 @@ namespace GaimeTray
                     case 0x51: g.BtnStart = down; break;
                     default: return;
                 }
+                try { GunKey?.Invoke(sn, vkey, down); } catch { }
                 if (vkey == 0x51 && down && StartButtonCalibrates && _gallery == null && _calib == null &&
                     (DateTime.UtcNow - _lastStartCal).TotalSeconds > 2)
                 {

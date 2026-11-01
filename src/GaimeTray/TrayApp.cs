@@ -16,6 +16,7 @@ namespace GaimeTray
         readonly FeederEngine _eng = new FeederEngine();
         readonly Kiosk _kiosk;
         readonly GunPointer _pointer;
+        readonly RetroBatNav _nav;
         // `GaimeTray.exe --setup` (RetroBat's entry) signals OpenEvent; the tray
         // opens the wizard and signals ClosedEvent when it closes.
         public const string OpenEvent = "GaimeTray.OpenSetup", ClosedEvent = "GaimeTray.SetupClosed";
@@ -59,6 +60,7 @@ namespace GaimeTray
             // the cursor guard has nothing to undo (outside a game).
             RawInputWindow.TouchMovesCursor = !SystemChecks.TouchGateOff();
             _pointer = new GunPointer(_eng);
+            _nav = new RetroBatNav(_eng);
             _invoker.CreateControl();
             var setupWait = new Thread(() =>
             {

@@ -157,6 +157,8 @@ namespace GaimeTray
                     catch (Exception ex) { log?.Invoke("could not remove " + dir + ": " + ex.Message); }
                 }
 
+            try { WriteGamelist(roms, tpDir, wanted.Select(Path.GetFileNameWithoutExtension), log); }
+            catch (Exception ex) { log?.Invoke("gamelist.xml not written: " + ex.Message); }
             int added = GaimeFeeder.PicoOutput.EnsureGames(processes);
             if (added > 0) log?.Invoke(added + " game process(es) added to the bridge list");
             try { log?.Invoke(AddSetupEntry(retroBatDir)); } catch (Exception ex) { log?.Invoke("Setup entry: " + ex.Message); }
@@ -179,6 +181,90 @@ namespace GaimeTray
             File.WriteAllText(bat, "@echo off\r\nrem Opens the G'AIM'E lightgun setup (GaimeTray). Written by the tray's setup wizard.\r\n" +
                 "\"" + exe + "\" --setup\r\n");
             return "added " + bat + " — in RetroBat, update the game lists to see it under Windows";
+        }
+
+        // ---- kiosk mode: retrobat.ini InterfaceMode (0 normal, 1 kiosk, 2 kid) --
+        // RetroBat's wiki: the main menu is cut to the volume control, metadata
+        // and favourites editing are off, all games stay playable. Leave it
+        // with the pad sequence A A A B A (on the guns: A, A, A, B, A — the
+        // tray turns the gun's A/B into RetroBat's keys), or here.
+
+        static string Ini(string dir) => Path.Combine(dir, "retrobat.ini");
+        static readonly Regex ModeLine = new Regex(@"^\s*InterfaceMode\s*=\s*(\d+)", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+        public static bool KioskOn(string dir)
+        {
+            try
+            {
+                var m = ModeLine.Match(File.ReadAllText(Ini(dir)));
+                return m.Success && m.Groups[1].Value == "1";
+            }
+            catch { return false; }
+        }
+
+        // Takes effect the next time RetroBat starts.
+        public static string SetKiosk(string dir, bool on)
+        {
+            if (!Valid(dir)) throw new InvalidOperationException("set the RetroBat folder first");
+            var ini = Ini(dir);
+            string text = File.Exists(ini) ? File.ReadAllText(ini) : "";
+            string line = "InterfaceMode=" + (on ? "1" : "0");
+            text = ModeLine.IsMatch(text)
+                ? Regex.Replace(text, @"^\s*InterfaceMode\s*=.*$", line, RegexOptions.Multiline | RegexOptions.IgnoreCase)
+                : text.TrimEnd() + (text.Length > 0 ? "\r\n" : "") + line + "\r\n";
+            File.WriteAllText(ini, text);
+            return "kiosk mode " + (on ? "on" : "off") + " — applies the next time RetroBat starts";
+        }
+
+        // ---- game list: names, genre, year and TeknoParrot's icon -------------
+        // EmulationStation's roms\<system>\gamelist.xml (<gameList><game><path>,
+        // <name>, <image>, ...). Only our games' entries are added or updated;
+        // nothing else in the file is removed.
+        static void WriteGamelist(string roms, string tpDir, IEnumerable<string> names, Action<string> log)
+        {
+            var file = Path.Combine(roms, "gamelist.xml");
+            System.Xml.Linq.XDocument doc;
+            try { doc = File.Exists(file) ? System.Xml.Linq.XDocument.Load(file) : new System.Xml.Linq.XDocument(new System.Xml.Linq.XElement("gameList")); }
+            catch (Exception ex) { log?.Invoke("gamelist.xml unreadable, left alone: " + ex.Message); return; }
+            var root = doc.Root;
+            Directory.CreateDirectory(Path.Combine(roms, "images"));
+            foreach (var name in names)
+            {
+                string path = "./" + name + ".teknoparrot";
+                var game = root.Elements("game").FirstOrDefault(g => string.Equals((string)g.Element("path"), path, StringComparison.OrdinalIgnoreCase));
+                if (game == null) { game = new System.Xml.Linq.XElement("game", new System.Xml.Linq.XElement("path", path)); root.Add(game); }
+                void Set(string el, string value) { if (!string.IsNullOrEmpty(value)) { var e = game.Element(el); if (e == null) game.Add(new System.Xml.Linq.XElement(el, value)); else e.Value = value; } }
+                try
+                {
+                    var meta = Path.Combine(tpDir, "Metadata", name + ".json");
+                    if (File.Exists(meta))
+                    {
+                        using var j = System.Text.Json.JsonDocument.Parse(File.ReadAllText(meta));
+                        string Str(string k) => j.RootElement.TryGetProperty(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+                        Set("name", Str("game_name"));
+                        Set("genre", Str("game_genre"));
+                        Set("desc", Str("platform"));
+                        if (Str("release_year") is string y && Regex.IsMatch(y, @"^\d{4}$")) Set("releasedate", y + "0101T000000");
+                        var icon = Str("icon_name");
+                        var src = icon == null ? null : Path.Combine(tpDir, "Icons", icon);
+                        if (src != null && File.Exists(src))
+                        {
+                            var dst = Path.Combine(roms, "images", name + Path.GetExtension(src));
+                            File.Copy(src, dst, true);
+                            Set("image", "./images/" + Path.GetFileName(dst));
+                        }
+                    }
+                }
+                catch (Exception ex) { log?.Invoke(name + ": game list details skipped: " + ex.Message); }
+            }
+            // Entries for our .teknoparrot links that no longer exist.
+            foreach (var g in root.Elements("game").ToList())
+            {
+                var pth = (string)g.Element("path") ?? "";
+                if (pth.EndsWith(".teknoparrot", StringComparison.OrdinalIgnoreCase) && !Directory.Exists(Path.Combine(roms, pth.TrimStart('.', '/'))))
+                    g.Remove();
+            }
+            doc.Save(file);
         }
 
         // Programs that are installers, updaters or helpers, not games.

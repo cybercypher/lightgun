@@ -19,6 +19,7 @@ namespace GaimeTray
         readonly TextBox _dir;
         readonly Label _state, _result;
         readonly ListView _games;
+        readonly CheckBox _kiosk;
 
         public RetroBatPage(SetupWizard w) : base(w)
         {
@@ -58,12 +59,25 @@ namespace GaimeTray
             _result = Ui.Text("", 0, 310, 650, 54, Ui.Lime);
             Controls.AddRange(new Control[] { sync, _games, _result });
 
-            Controls.Add(Ui.Text("In RetroBat: update the game lists. Only systems with games are shown, so you'll see TeknoParrot (and " +
-                "Windows, for GaimeTray Setup); hide any other system under UI settings. If a game ignores the guns when started from " +
-                "RetroBat, bind it again on the Games page.", 0, 368, 650, 54, Ui.Dim));
+            _kiosk = new CheckBox
+            {
+                Text = "Kiosk mode (players can't change RetroBat's settings; leave it with A A A B A)", Location = new Point(0, 366),
+                AutoSize = true, ForeColor = Ui.Fg, BackColor = Ui.Bg,
+            };
+            _kiosk.CheckedChanged += (s, e) =>
+            {
+                if (_loading) return;
+                Save();
+                try { Say(Check.Ok, RetroBat.SetKiosk(Wizard.Config.RetroBatDir, _kiosk.Checked)); }
+                catch (Exception ex) { Say(Check.Fail, ex.Message); }
+            };
+            Controls.Add(_kiosk);
+            Controls.Add(Ui.Text("With the guns in RetroBat's menu: shoot the left/right edge to move, the top/bottom edge for up/down, " +
+                "the centre to launch. A launches, B goes back, Start opens the menu, Coin is Select. Update RetroBat's game lists after " +
+                "setting up; set the carousel under Select → Gamelist view style (depends on the theme).", 0, 392, 650, 54, Ui.Dim));
 
-            Controls.Add(Ui.Text("Other systems (optional)", 0, 428, 400, 22, null, 10, true));
-            var emus = Ui.Btn("Add emulators to bridge", 0, 452, 200);
+            Controls.Add(Ui.Text("Other systems (optional)", 0, 452, 400, 22, null, 10, true));
+            var emus = Ui.Btn("Add emulators to bridge", 0, 476, 200);
             emus.Click += (s, e) =>
             {
                 Save();
@@ -72,13 +86,18 @@ namespace GaimeTray
                 catch (Exception ex) { Say(Check.Fail, ex.Message); }
             };
             Controls.Add(Ui.Text("Only for non-TeknoParrot games (MAME, Dolphin…): lets the guns aim in RetroBat's other emulators. " +
-                "Those emulators still need their own gun settings.", 210, 452, 440, 48, Ui.Dim));
+                "Those emulators still need their own gun settings.", 210, 476, 440, 48, Ui.Dim));
             Controls.Add(emus);
         }
+
+        bool _loading;
 
         public override void ShowPage()
         {
             if (_dir.Text.Trim().Length == 0) _dir.Text = SetupConfig.DetectRetroBat() ?? "";
+            _loading = true;
+            _kiosk.Checked = RetroBat.Valid(_dir.Text.Trim()) && RetroBat.KioskOn(_dir.Text.Trim());
+            _loading = false;
             Refresh_();
         }
 

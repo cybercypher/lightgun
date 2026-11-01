@@ -347,6 +347,23 @@ the gun games, and the tray keeps turning the guns into the bridge mice.
    game bar. The tray watches `emulationstation`: if RetroBat closes it is
    started again; Start + Coin on a gun closes it.
 
+**Using RetroBat with the guns.** RetroBat reads a keyboard with fixed keys
+(arrows, X launch, W back, Enter menu, Backspace select); the guns' own buttons
+send other keys and the trigger none, so RetroBat sees "no controller". While
+its menu is in front the tray translates: shoot the **left / right edge** to
+move (spin the carousel), the **top / bottom edge** for up / down, the
+**centre** to launch; gun **A** launches, **B** goes back, **Start** opens the
+menu, **Coin** is Select. The RetroBat step also writes
+`roms\teknoparrot\gamelist.xml` entries for the bound games (name, genre,
+year, TeknoParrot's icon as the picture), leaving other entries alone. A
+carousel is a theme choice: Select → *Gamelist view style* (it depends on the
+theme; RetroBat's content downloader has more themes).
+
+**Kiosk mode:** the RetroBat page's checkbox sets `InterfaceMode=1` in
+`retrobat.ini` (from RetroBat's next start): the menu is cut down to the volume
+control, all games stay playable. Leave it with **A A A B A** (the guns' A and B
+work for that) or untick it.
+
 **Other systems** (MAME, Dolphin…): **Add emulators to bridge** on the same
 page lets the guns aim in RetroBat's other emulators; those still need their
 own gun settings.
