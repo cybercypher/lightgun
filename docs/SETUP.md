@@ -318,7 +318,12 @@ clicks what is under it: buttons, checkboxes, list rows, tabs, the wizard's
 page list; a drop-down steps to its next choice per pull. Before a gun has a
 host calibration the crosshair follows its own Box Cal range. Windows' own
 touch taps from the guns are ignored in tray windows (they landed in the wrong
-place — that is what hit the grid's Cancel button). In the calibration grid,
+place — that is what hit the grid's Cancel button). The crosshair also shows over
+RetroBat's menu (to see what you're shooting at to move), and — with **Show the
+gun crosshair in games too** on the Games page — over games on the bridge list.
+In games it is a separate window on top: fine for windowed / borderless games
+(TeknoParrot's usual), hidden by an exclusive-fullscreen one; many games have
+their own crosshair option instead. It only clicks in tray windows. In the calibration grid,
 the gun's **Start** cancels, **V** toggles the border (not B: the gun's B
 button sends B), and Cancel sits between the left and middle targets.
 

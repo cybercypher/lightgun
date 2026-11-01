@@ -98,10 +98,23 @@ namespace GaimeTray
             };
             new ToolTip().SetToolTip(_fit, "On: the game picture is scaled into the area inside the white frame and the tray maps the aim to match. " +
                 "Off: the frame is drawn over the picture's edges. No recalibration needed either way.");
-            Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove, _fit });
+            var cross = new CheckBox
+            {
+                Text = "Show the gun crosshair in games too (always shown in the tray and RetroBat's menu)",
+                Location = new Point(0, y + 90), AutoSize = true, ForeColor = Ui.Fg, BackColor = Ui.Bg, Checked = w.Config.CrosshairInGames,
+            };
+            cross.CheckedChanged += (s, e) =>
+            {
+                Wizard.Config.CrosshairInGames = cross.Checked;
+                try { Wizard.Config.Save(); } catch { }
+                GunPointer.ShowInGames(cross.Checked);
+            };
+            new ToolTip().SetToolTip(cross, "Draws the tray's crosshair over the game at each gun's calibrated aim. Works for windowed / borderless games; " +
+                "an exclusive-fullscreen game hides it. Many games have their own crosshair setting instead.");
+            Controls.AddRange(new Control[] { _borderState, borderInstall, _borderToggle, borderRemove, _fit, cross });
 
             // ---- bridge game list
-            y += 96;
+            y += 120;
             Controls.Add(Ui.Text("Games that turn the bridge on", 0, y, 400, 22, null, 10, true));
             Controls.Add(Ui.Text(
                 "The bridge only moves the cursor while one of these processes is in the foreground. One exe name per line.",

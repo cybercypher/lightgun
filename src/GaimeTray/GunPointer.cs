@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Drawing;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -103,17 +104,44 @@ namespace GaimeTray
             _timer.Start();
         }
 
-        // A tray window is in front and no calibration or gallery is open.
-        bool Active()
+        enum Mode { None, Click, ShowOnly }
+
+        // Click: a tray window is in front (the trigger clicks it).
+        // ShowOnly: RetroBat's menu (RetroBatNav handles the shots), or a game
+        // on the bridge list when CrosshairInGames is on.
+        // None while a calibration or the gallery reads the guns.
+        Mode Current()
         {
-            if (!_eng.UiFree) return false;
+            if (!_eng.UiFree) return Mode.None;
             GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
-            return pid == (uint)Environment.ProcessId;
+            if (pid == (uint)Environment.ProcessId) return Mode.Click;
+            string name = ProcessName(pid);
+            if (string.Equals(name, RetroBat.FrontendProcess, StringComparison.OrdinalIgnoreCase)) return Mode.ShowOnly;
+            if (_inGames && name != null && PicoOutput.Games().Contains(name, StringComparer.OrdinalIgnoreCase)) return Mode.ShowOnly;
+            return Mode.None;
         }
+
+        bool Active() => Current() == Mode.Click;
+
+        // Foreground process name, looked up once per process.
+        uint _namePid;
+        string _name;
+        string ProcessName(uint pid)
+        {
+            if (pid == _namePid) return _name;
+            _namePid = pid;
+            try { using (var p = Process.GetProcessById((int)pid)) _name = p.ProcessName; }
+            catch { _name = null; }
+            return _name;
+        }
+
+        // Set from setup.json at start and when the Games page checkbox changes.
+        static volatile bool _inGames = GaimeFeeder.SetupConfig.Load().CrosshairInGames;
+        public static void ShowInGames(bool on) => _inGames = on;
 
         void Tick()
         {
-            bool on = Active();
+            bool on = Current() != Mode.None;
             var seen = new HashSet<string>();
             if (on)
                 foreach (var g in _eng.Snapshot())
