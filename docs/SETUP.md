@@ -312,13 +312,12 @@ seconds.
 
 ## 8a. Using the tray with the guns only
 
-While a GaimeTray window is in front (main window, setup wizard), each gun
-shows a crosshair at its calibrated aim (green P1, blue P2) and the trigger
-clicks what is under it: buttons, checkboxes, list rows, tabs, the wizard's
+While a GaimeTray window is in front (main window, setup wizard), the trigger
+clicks what is under each gun's calibrated aim (no crosshair is drawn there): buttons, checkboxes, list rows, tabs, the wizard's
 page list; a drop-down steps to its next choice per pull. Before a gun has a
 host calibration the crosshair follows its own Box Cal range. Windows' own
 touch taps from the guns are ignored in tray windows (they landed in the wrong
-place — that is what hit the grid's Cancel button). The crosshair also shows over
+place — that is what hit the grid's Cancel button). A crosshair (green P1, blue P2) shows over
 RetroBat's menu (to see what you're shooting at to move), and — with **Show the
 gun crosshair in games too** on the Games page — over games on the bridge list.
 In games it is a separate window on top: fine for windowed / borderless games

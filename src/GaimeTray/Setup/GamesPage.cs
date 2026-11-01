@@ -100,7 +100,7 @@ namespace GaimeTray
                 "Off: the frame is drawn over the picture's edges. No recalibration needed either way.");
             var cross = new CheckBox
             {
-                Text = "Show the gun crosshair in games too (always shown in the tray and RetroBat's menu)",
+                Text = "Show the gun crosshair in games too (it always shows in RetroBat's menu)",
                 Location = new Point(0, y + 90), AutoSize = true, ForeColor = Ui.Fg, BackColor = Ui.Bg, Checked = w.Config.CrosshairInGames,
             };
             cross.CheckedChanged += (s, e) =>

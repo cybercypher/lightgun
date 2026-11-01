@@ -141,7 +141,10 @@ namespace GaimeTray
 
         void Tick()
         {
-            bool on = Current() != Mode.None;
+            // Drawn only over RetroBat's menu (and games, when asked): over the
+            // tray it followed the gun across the whole desktop. The trigger
+            // still clicks tray windows without it.
+            bool on = Current() == Mode.ShowOnly;
             var seen = new HashSet<string>();
             if (on)
                 foreach (var g in _eng.Snapshot())
@@ -162,7 +165,6 @@ namespace GaimeTray
         void OnPress(string sn)
         {
             if (!Active() || !_eng.GunScreenPoint(sn, out var pt)) return;
-            if (_marks.TryGetValue(sn, out var mark)) mark.Flash();
             try { Click(pt); } catch (Exception ex) { _eng.Note("gun click: " + ex.Message); }
         }
 
