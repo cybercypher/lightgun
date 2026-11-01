@@ -123,6 +123,16 @@ namespace GaimeTray
 
         bool Active() => Current() == Mode.Click;
 
+        // The window under the point belongs to the tray (its forms, its message
+        // boxes). The crosshair's centre is see-through, so it never counts.
+        static bool OverTrayWindow(Point pt)
+        {
+            IntPtr h = WindowFromPoint(pt);
+            if (h == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(h, out uint pid);
+            return pid == (uint)Environment.ProcessId;
+        }
+
         // Foreground process name, looked up once per process.
         uint _namePid;
         string _name;
@@ -141,15 +151,17 @@ namespace GaimeTray
 
         void Tick()
         {
-            // Drawn only over RetroBat's menu (and games, when asked): over the
-            // tray it followed the gun across the whole desktop. The trigger
-            // still clicks tray windows without it.
-            bool on = Current() == Mode.ShowOnly;
+            // Over RetroBat's menu (and games, when asked) everywhere; over the
+            // tray only while the gun points inside one of its windows — over
+            // the whole desktop it was just in the way.
+            var mode = Current();
+            bool on = mode != Mode.None;
             var seen = new HashSet<string>();
             if (on)
                 foreach (var g in _eng.Snapshot())
                 {
                     if (g.AgeMs > 500 || !_eng.GunScreenPoint(g.Serial, out var pt)) continue;
+                    if (mode == Mode.Click && !OverTrayWindow(pt)) continue;
                     seen.Add(g.Serial);
                     if (!_marks.TryGetValue(g.Serial, out var mark))
                     {
@@ -165,6 +177,7 @@ namespace GaimeTray
         void OnPress(string sn)
         {
             if (!Active() || !_eng.GunScreenPoint(sn, out var pt)) return;
+            if (_marks.TryGetValue(sn, out var mark) && mark.Visible) mark.Flash();
             try { Click(pt); } catch (Exception ex) { _eng.Note("gun click: " + ex.Message); }
         }
 

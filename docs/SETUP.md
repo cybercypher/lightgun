@@ -313,7 +313,8 @@ seconds.
 ## 8a. Using the tray with the guns only
 
 While a GaimeTray window is in front (main window, setup wizard), the trigger
-clicks what is under each gun's calibrated aim (no crosshair is drawn there): buttons, checkboxes, list rows, tabs, the wizard's
+clicks what is under each gun's calibrated aim, and a crosshair shows while the
+gun points inside a GaimeTray window (not over the rest of the desktop): buttons, checkboxes, list rows, tabs, the wizard's
 page list; a drop-down steps to its next choice per pull. Before a gun has a
 host calibration the crosshair follows its own Box Cal range. Windows' own
 touch taps from the guns are ignored in tray windows (they landed in the wrong
