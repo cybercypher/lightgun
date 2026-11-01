@@ -327,7 +327,7 @@ button sends B), and Cancel sits between the left and middle targets.
 GaimeTray can start RetroBat instead of one game; RetroBat then launches the
 games, and the tray keeps turning the guns into the bridge mice.
 
-1. Wizard → Games → **RetroBat**: set its folder (**Find** looks in the usual
+1. Wizard → **RetroBat** page: set its folder (**Find** looks in the usual
    places).
 2. **Link TeknoParrot** makes `RetroBat\emulators\teknoparrot` a link
    (junction) to the TeknoParrot folder above, so RetroBat uses the same

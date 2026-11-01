@@ -57,7 +57,7 @@ namespace GaimeTray
             _pages = new WizardPage[]
             {
                 new CheckPage(this), new GunsPage(this), new CalibratePage(this),
-                new GamesPage(this), new AutoStartPage(this), new FinishPage(this),
+                new GamesPage(this), new RetroBatPage(this), new AutoStartPage(this), new FinishPage(this),
             };
 
             var side = new Panel { Dock = DockStyle.Left, Width = 190, BackColor = Ui.Panel };
