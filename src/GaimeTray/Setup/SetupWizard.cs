@@ -13,6 +13,8 @@ namespace GaimeTray
     {
         public readonly FeederEngine Engine;
         public readonly SetupConfig Config;
+        // The Games page re-runs RetroBat's sync after Bind to guns.
+        public RetroBatPage RetroBatPg { get; private set; }
 
         readonly WizardPage[] _pages;
         readonly Label[] _nav;
@@ -57,7 +59,7 @@ namespace GaimeTray
             _pages = new WizardPage[]
             {
                 new CheckPage(this), new GunsPage(this), new CalibratePage(this),
-                new GamesPage(this), new RetroBatPage(this), new AutoStartPage(this), new FinishPage(this),
+                new GamesPage(this), RetroBatPg = new RetroBatPage(this), new AutoStartPage(this), new FinishPage(this),
             };
 
             var side = new Panel { Dock = DockStyle.Left, Width = 190, BackColor = Ui.Panel };

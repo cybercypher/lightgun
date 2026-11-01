@@ -48,8 +48,16 @@ namespace GaimeTray
                     throw new InvalidOperationException(link + " already has a TeknoParrot copy in it — move it away first");
                 Directory.Delete(link);
             }
+            MakeJunction(link, tpDir);
+            return "linked " + link + " -> " + tpDir;
+        }
+
+        // A directory junction (mklink /J needs no admin). Deleting it later
+        // with Directory.Delete(path) (not recursive) removes only the link.
+        static void MakeJunction(string link, string target)
+        {
             Directory.CreateDirectory(Path.GetDirectoryName(link));
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c mklink /J \"" + link + "\" \"" + tpDir + "\"")
+            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c mklink /J \"" + link + "\" \"" + target + "\"")
                 { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
             using (var p = System.Diagnostics.Process.Start(psi))
             {
@@ -57,7 +65,102 @@ namespace GaimeTray
                 p.WaitForExit(5000);
                 if (!Directory.Exists(link)) throw new InvalidOperationException("mklink failed: " + err.Trim());
             }
-            return "linked " + link + " -> " + tpDir;
+        }
+
+        static bool IsJunction(string dir) => new DirectoryInfo(dir).LinkTarget != null;
+
+        // ---- RetroBat lists exactly the TeknoParrot games bound to the guns --
+
+        public sealed class GameLine
+        {
+            public string Game, RetroBat, Guns, Border;
+            public bool Ok;
+        }
+
+        // The game's top folder: GamePath minus the exe's location inside the
+        // game, from TeknoParrot's GameSetup\<name>.xml (Jurassic Park: "game";
+        // Luigi's Mansion: "exe\x64\VACUUM.exe"). Falls back to GamePath's folder.
+        static string GameRoot(string tpDir, string name, string gamePath)
+        {
+            try
+            {
+                var setup = Path.Combine(tpDir, "GameSetup", name + ".xml");
+                if (File.Exists(setup))
+                {
+                    string rel = ((string)System.Xml.Linq.XDocument.Load(setup).Root?.Element("GameExecutableLocation") ?? "").Replace('/', '\\').Trim('\\');
+                    string gp = gamePath.Replace('/', '\\');
+                    if (rel.Length > 0 && gp.EndsWith("\\" + rel, StringComparison.OrdinalIgnoreCase))
+                        return gp.Substring(0, gp.Length - rel.Length - 1);
+                }
+            }
+            catch { }
+            return Path.GetDirectoryName(gamePath);
+        }
+
+        // For every TeknoParrot game bound to the guns: link it into
+        // roms\teknoparrot as <Name>.teknoparrot (the name RetroBat matches to
+        // TeknoParrot's Metadata), put its process on the bridge list, and
+        // report guns / border. Links this made for games no longer bound are
+        // removed; real folders are never touched. Also links RetroBat's
+        // TeknoParrot to this one and adds the Setup entry.
+        public static List<GameLine> SyncTeknoParrotGames(string retroBatDir, string tpDir, Action<string> log)
+        {
+            if (!Valid(retroBatDir)) throw new InvalidOperationException("set the RetroBat folder first");
+            if (string.IsNullOrEmpty(tpDir) || !File.Exists(Path.Combine(tpDir, GaimeFeeder.SetupConfig.TeknoParrotExe)))
+                throw new InvalidOperationException("set the TeknoParrot folder on the Games page first");
+            log?.Invoke(LinkTeknoParrot(retroBatDir, tpDir));
+            var roms = Path.Combine(retroBatDir, "roms", "teknoparrot");
+            Directory.CreateDirectory(roms);
+
+            var lines = new List<GameLine>();
+            var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var processes = new List<string>();
+            foreach (var p in TeknoParrotProfiles.Scan(tpDir).Where(p => p.P1))
+            {
+                string name = Path.GetFileNameWithoutExtension(p.File);
+                var line = new GameLine { Game = p.Game, Guns = p.P2 ? "P1 + P2" : "P1 only" };
+                lines.Add(line);
+                string gamePath = "";
+                try { gamePath = (string)System.Xml.Linq.XDocument.Load(p.File).Root?.Element("GamePath") ?? ""; } catch { }
+                var bt = ReshadeBorder.For(tpDir, p.File);
+                var bs = ReshadeBorder.Get(bt);
+                line.Border = bs == ReshadeBorder.State.On ? "on" : bs == ReshadeBorder.State.Off ? "off"
+                    : bs == ReshadeBorder.State.Unsupported ? "n/a" : bs == ReshadeBorder.State.NotInstalled ? "not installed" : "old — reinstall";
+                string root = gamePath.Length == 0 ? null : GameRoot(tpDir, name, gamePath);
+                if (root == null || !Directory.Exists(root)) { line.RetroBat = "game folder not found — set the game in TeknoParrot"; continue; }
+                if (!File.Exists(Path.Combine(tpDir, "Metadata", name + ".json")))
+                    log?.Invoke(name + ": no Metadata\\" + name + ".json in TeknoParrot — RetroBat may not list it");
+                var entry = Path.Combine(roms, name + ".teknoparrot");
+                wanted.Add(Path.GetFileName(entry));
+                try
+                {
+                    if (Directory.Exists(entry))
+                    {
+                        var info = new DirectoryInfo(entry);
+                        if (info.LinkTarget == null) { line.RetroBat = "listed (its own folder, left alone)"; line.Ok = true; }
+                        else if (string.Equals(Path.GetFullPath(info.LinkTarget).TrimEnd('\\'), Path.GetFullPath(root).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                        { line.RetroBat = "listed"; line.Ok = true; }
+                        else { Directory.Delete(entry); MakeJunction(entry, root); line.RetroBat = "listed (link updated)"; line.Ok = true; }
+                    }
+                    else { MakeJunction(entry, root); line.RetroBat = "added"; line.Ok = true; }
+                }
+                catch (Exception ex) { line.RetroBat = "failed: " + ex.Message; }
+                var proc = TeknoParrotProfiles.GameProcess(p.File);
+                if (proc != null) processes.Add(proc);
+            }
+
+            // Links this sync made earlier for games that are no longer bound.
+            foreach (var dir in Directory.GetDirectories(roms, "*.teknoparrot"))
+                if (!wanted.Contains(Path.GetFileName(dir)) && IsJunction(dir))
+                {
+                    try { Directory.Delete(dir); log?.Invoke("removed " + Path.GetFileName(dir) + " from RetroBat (no longer bound)"); }
+                    catch (Exception ex) { log?.Invoke("could not remove " + dir + ": " + ex.Message); }
+                }
+
+            int added = GaimeFeeder.PicoOutput.EnsureGames(processes);
+            if (added > 0) log?.Invoke(added + " game process(es) added to the bridge list");
+            try { log?.Invoke(AddSetupEntry(retroBatDir)); } catch (Exception ex) { log?.Invoke("Setup entry: " + ex.Message); }
+            return lines;
         }
 
         // A "game" in RetroBat's Windows system (roms\windows, .bat accepted)

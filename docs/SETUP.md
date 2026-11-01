@@ -324,25 +324,32 @@ button sends B), and Cancel sits between the left and middle targets.
 
 ## 8b. RetroBat (optional)
 
-GaimeTray can start RetroBat instead of one game; RetroBat then launches the
-games, and the tray keeps turning the guns into the bridge mice.
+GaimeTray can start RetroBat instead of one game; RetroBat lists and launches
+the gun games, and the tray keeps turning the guns into the bridge mice.
 
-1. Wizard → **RetroBat** page: set its folder (**Find** looks in the usual
-   places).
-2. **Link TeknoParrot** makes `RetroBat\emulators\teknoparrot` a link
-   (junction) to the TeknoParrot folder above, so RetroBat uses the same
-   install — the same profiles, gun bindings and ReShade borders. It refuses if
-   that folder already holds a separate TeknoParrot copy.
-3. **Add emulators to bridge** puts every program under `RetroBat\emulators`
-   on the bridge's game list, so the guns aim in whichever emulator RetroBat
-   puts in front. TeknoParrot games still come from **Bind to guns**.
-4. **Add Setup to RetroBat** writes `roms\windows\GaimeTray Setup.bat`; after
-   RetroBat updates its game lists, *GaimeTray Setup* under Windows opens this
-   wizard (in front of RetroBat), and RetroBat waits until it is closed.
-   (It runs `GaimeTray.exe --setup`, which starts the tray first if needed.)
-5. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
+1. Games page: **Bind to guns** for each TeknoParrot game you want.
+2. Wizard → **RetroBat** page: set its folder (**Find**), then **Set up RetroBat
+   for my bound games**. For every game bound to the guns it:
+   - links `RetroBat\emulators\teknoparrot` to your TeknoParrot (one install:
+     same profiles, bindings and borders);
+   - lists the game in RetroBat as `roms\teknoparrot\<Name>.teknoparrot`, a
+     link to the game's folder (no copy; `<Name>` is TeknoParrot's metadata
+     name, e.g. `JurassicPark`, `LuigisMansion`); links it made for games no
+     longer bound are removed, real folders are never touched;
+   - puts the game's process on the bridge list;
+   - adds *GaimeTray Setup* under Windows (opens this wizard in front of
+     RetroBat; RetroBat waits until it closes).
+   The table shows each game's RetroBat entry, guns and border. Binding a game
+   later on the Games page runs the same step by itself.
+3. In RetroBat, update the game lists. Only systems with games show, so you see
+   TeknoParrot (and Windows); hide others under its UI settings.
+4. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
    game bar. The tray watches `emulationstation`: if RetroBat closes it is
    started again; Start + Coin on a gun closes it.
+
+**Other systems** (MAME, Dolphin…): **Add emulators to bridge** on the same
+page lets the guns aim in RetroBat's other emulators; those still need their
+own gun settings.
 
 Not known yet (test on the rig): RetroBat "automatically configures" controls
 for TeknoParrot games and guns, and may rewrite the gun rows in the profiles

@@ -330,8 +330,12 @@ namespace GaimeTray
                 }
             }
             Refresh_();
+            // Binding a game also lists it in RetroBat, when RetroBat is set up.
+            bool rb = ok > 0 && RetroBat.Valid(Wizard.Config.RetroBatDir);
+            if (rb) Wizard.RetroBatPg?.Sync(false);
             State(_tpState, ok == picked.Count ? Check.Ok : Check.Fail,
-                ok + " of " + picked.Count + " bound. " + (picked.Count == 1 ? last : "Details in the Log tab."));
+                ok + " of " + picked.Count + " bound" + (rb ? " and listed in RetroBat" : "") + ". " +
+                (picked.Count == 1 ? last : "Details in the Log tab."));
         }
 
         void BindDs()
