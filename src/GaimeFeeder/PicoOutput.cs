@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32;
@@ -63,7 +64,31 @@ namespace GaimeFeeder
         // Absolute reports own the shared Windows cursor, so the bridge only
         // streams while a game process is in the foreground. On the desktop the
         // Pico stays silent and the real mouse is free.
-        static readonly HashSet<string> _games = LoadGames();
+        // Built-in list; bridge-processes.txt replaces it. Declared before
+        // _games: static initializers run in textual order.
+        public static readonly string[] DefaultGames =
+        {
+            "DemulShooter", "DemulShooterX64", "TeknoParrot",
+            "EMULATOR", "emulator_multicpu",
+            "BudgieLoader", "game",
+            "pcsx2", "pcsx2x6", "rpcs3", "Dolphin", "PPSSPP",
+            "retroarch", "mame", "flycast", "supermodel",
+            "BigPEmu", "demul", "Fusion", "gens",
+        };
+
+        static volatile HashSet<string> _games = LoadGames();
+
+        // Games whose picture the ReShade border shrinks inside the frame
+        // (FIT). While one of them is in front, the aim is mapped into the
+        // inner area so it still lands on what the gun points at.
+        static volatile HashSet<string> _insetGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static volatile bool _inset;
+
+        public static void SetInsetGames(IEnumerable<string> names)
+        {
+            _insetGames = new HashSet<string>(names ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            Log("fit-inside-border games: " + (_insetGames.Count == 0 ? "none" : string.Join(", ", _insetGames)));
+        }
         static readonly int _pulsePeriodMs = LoadPulsePeriod();
         static int _pulseTick;
 
@@ -140,6 +165,13 @@ namespace GaimeFeeder
 
             if (player < 0 || player > 1) return;
 
+            if (_inset)
+            {
+                // The game fills the screen minus the border on every edge.
+                double b = ScreenBorder.Pixels;
+                sx = (sx - b) * (screenW - 1) / Math.Max(1.0, screenW - 1 - 2 * b);
+                sy = (sy - b) * (screenH - 1) / Math.Max(1.0, screenH - 1 - 2 * b);
+            }
             double fx = Math.Clamp(sx / Math.Max(1.0, screenW - 1), 0.0, 1.0);
             double fy = Math.Clamp(sy / Math.Max(1.0, screenH - 1), 0.0, 1.0);
             int x = (int)Math.Round(fx * 32767.0);
@@ -226,6 +258,48 @@ namespace GaimeFeeder
             return true;
         }
 
+        // The COM name Windows assigned to the bridge's CDC function, or null.
+        // Registry only: it stays set after the bridge is unplugged.
+        public static string BridgePort() => FindPort();
+
+        // Game process names that unlock the stream, as currently loaded.
+        public static List<string> Games()
+        {
+            var list = new List<string>(_games);
+            list.Sort(StringComparer.OrdinalIgnoreCase);
+            return list;
+        }
+
+        // Re-read bridge-processes.txt after the setup wizard edits it. The
+        // feed thread only reads the reference, so swapping it is enough.
+        public static void ReloadGames() => _games = LoadGames();
+
+        // Make sure one game process unlocks the stream (setup wizard, after
+        // binding a game). Writes bridge-processes.txt from the current list
+        // when it does not exist yet. True when the list changed.
+        public static int EnsureGames(IEnumerable<string> names)
+        {
+            var add = names.Where(n => !string.IsNullOrWhiteSpace(n) && !_games.Contains(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (add.Count == 0) return 0;
+            var list = Games();
+            list.AddRange(add);
+            File.WriteAllLines(AppPaths.BridgeProcesses,
+                new[] { "# Game processes that turn the Pico bridge on (setup wizard)." }.Concat(list));
+            ReloadGames();
+            return add.Count;
+        }
+
+        public static bool EnsureGame(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || _games.Contains(name)) return false;
+            var names = Games();
+            names.Add(name);
+            File.WriteAllLines(AppPaths.BridgeProcesses,
+                new[] { "# Game processes that turn the Pico bridge on (setup wizard)." }.Concat(names));
+            ReloadGames();
+            return true;
+        }
+
         // The bridge's CDC function is USB\VID_1209&PID_0A11&MI_02; Windows
         // stores the assigned COM name under the instance's Device Parameters.
         static string FindPort()
@@ -274,12 +348,13 @@ namespace GaimeFeeder
                         using var process = Process.GetProcessById((int)pid);
                         name = process.ProcessName;
                         active = _games.Contains(name);
+                        _inset = active && _insetGames.Contains(name);
                     }
                 }
                 catch { }
 
                 _active = active;
-                string gate = active ? "streaming: " + name : "paused: " + name;
+                string gate = active ? "streaming: " + name + (_inset ? " (fit inside border)" : "") : "paused: " + name;
                 if (gate != _lastGate)
                 {
                     _lastGate = gate;
@@ -308,16 +383,7 @@ namespace GaimeFeeder
         // the built-in list.
         static HashSet<string> LoadGames()
         {
-            var defaults = new[]
-            {
-                "DemulShooter", "DemulShooterX64", "TeknoParrot",
-                "EMULATOR", "emulator_multicpu",
-                "BudgieLoader", "game",
-                "pcsx2", "pcsx2x6", "rpcs3", "Dolphin", "PPSSPP",
-                "retroarch", "mame", "flycast", "supermodel",
-                "BigPEmu", "demul", "Fusion", "gens",
-            };
-            var set = new HashSet<string>(defaults, StringComparer.OrdinalIgnoreCase);
+            var set = new HashSet<string>(DefaultGames, StringComparer.OrdinalIgnoreCase);
             try
             {
                 var path = AppPaths.BridgeProcesses;

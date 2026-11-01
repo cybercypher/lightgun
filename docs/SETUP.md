@@ -47,12 +47,31 @@ Unzip `GaimeTray-win-x64.zip` anywhere, for example `C:\games\feeder`, and run
 That maps a gun's **on-device serial** to a player number. If your guns do not
 report `11111` / `22222` yet, do step 3 first, then fix this file.
 
+### The setup wizard
+
+On the first start (no `setup.json` next to the exe yet) the tray opens a
+step-by-step wizard. It walks steps 3–7 below in the right order, so you can
+follow it instead of this page. Reopen it any time from the tray menu
+(**Setup…**) or the Log tab (**Setup wizard**).
+
+| Page | What it does |
+|---|---|
+| System check | display scaling 100 %, both bridge mice, the bridge COM port, guns connected; **Flash bridge…** copies `gun_bridge.uf2` to a Pico held in BOOTSEL |
+| Guns | lists the connected guns by serial, flags guns that share a serial, **Write serial…** (one gun at a time, §3), assigns Player 1 / 2 and saves `guns.json` |
+| Calibrate | per gun: **1 · Box Cal → 2 · Host grid → 3 · Test**, with the time of each and a warning when the host grid is older than the last Box Cal or was made at another resolution |
+| Games | DemulShooter folder + **Bind to bridge** (kept bound on every tray start); TeknoParrot folder, which profiles have both guns bound, and **Bind to guns**; the ReShade white border for ElfLdr2 games; the list of game processes that turn the bridge on (`bridge-processes.txt`) |
+| Finish | summary, start with Windows |
+
+While the wizard is open, a gun without a host calibration does not pop the
+calibration screen by itself — the Calibrate page runs it after Box Cal. The
+PC records each Box Cal it sends in `calibrations/boxcal_<serial>.json`; the
+main window's gun card shows the same "redo the host grid" warning.
+
 ## 3. Give each gun its serial
 
 The tray identifies a gun by the serial stored inside the gun (not the USB
 serial, which changes on every replug). The Log tab has a **Write S/N** button
-for exactly this; `tools/gun_set.ps1 -Value 11111` does the same thing from
-PowerShell if you prefer.
+for exactly this (the wizard's Guns page opens the same dialog).
 
 1. Plug in **one** gun. The dialog shows `detected 1 gun, serial …`.
 2. Type `11111`, press **Write**. It prints the ack and the serial it reads
@@ -80,6 +99,15 @@ and the aim drifts.
 
 The white reference border (32 px) is on by default in both screens. Leave it
 alone during calibration — it is part of the reference.
+
+The border is one setting (wizard → Calibrate, **Turn border off/on**; the
+Games page button is the same switch). It covers the tray screens and the
+ReShade border in games together, and is kept in `setup.json`. Every Box Cal
+and host grid records the border state it was made under; after a change the
+Calibrate page and the gun card mark each gun **full recalibration** until it
+has a new Box Cal and grid. Box Cal and the grid always start with the
+configured border, and a **V** test toggle ends when the gallery or the
+grid closes. If the border was toggled during a run, that run is flagged.
 
 ### 4a. Gun-side: Box Cal (once per gun, redo whenever you like)
 
@@ -120,11 +148,19 @@ The median miss is the number that matters; anything under ~60 px at 4K is
 inside a normal target. If a gun is much worse than that, redo 4b for that gun
 (and 4a first if you changed anything on the gun side).
 
+**No mouse:** while the Calibrate page is open, press **Start** on a gun — it
+runs all three steps for that gun. **One click for all three steps:** the
+Calibrate page's **All steps** button
+runs Box Cal, opens the host grid by itself as soon as Box Cal reaches the gun,
+then reopens the gallery for the test shots — driven by the gun's trigger, so
+the mouse is not needed in between. Esc stops the run.
+
 ### Re-calibration rules
 
 | Event | What to redo |
 |---|---|
 | You ran Box Cal | the PC-side grid for that gun (4b) |
+| White border turned on or off | **both** steps for **every** gun: Box Cal (4a), then the grid (4b) — the gun's camera sees the border |
 | Gun dropped / mount knocked / new player stance | the PC-side grid (4b) |
 | Screen resolution or Windows scaling changed | reboot-level: fix scaling to 100 %, then 4b for both |
 | New gun or a gun with a wiped serial | write the serial (step 3), then 4a, then 4b |
@@ -132,7 +168,26 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 
 ## 5. TeknoParrot
 
-1. Point TP at the game and set **Input API = RawInput**.
+1. Add the game in TP once (so `UserProfiles\<Game>.xml` exists), then close TP.
+   In the wizard's Games page select the game and press **Bind to guns**. It
+   sets **Input API = RawInput** and writes every gun row for both players
+   (with a timestamped backup). Rows are matched by TP's internal
+   `InputMapping`, which is the same in every game whatever the label says:
+
+   | `InputMapping` | gun | Jurassic Park | Luigi's Mansion |
+   |---|---|---|---|
+   | `P1LightGun` | aim (Bridge Mouse 1) | P1 Light Gun | Player 1 Light Gun |
+   | `P1Button1` | Trigger → `LeftButton` | Trigger P1 | Player 1 Vacuum Button |
+   | `P1Button2` | A → `MiddleButton` | Grenades P1 | Player 1 Vacuum Lever |
+   | `P1Button3` | B → `RightButton` | — | Player 1 Vacuum Screen Out |
+   | `P1ButtonStart` | Start → `Button5` | Start Button P1 | Player 1 Start |
+   | `Coin1` / `Coin2` | Coin on gun 1 / 2 → `Button4` | Coin | Coin 1 / Coin 2 |
+
+   P2 rows go to Bridge Mouse 2 the same way. A row labelled *Reload* always
+   gets B and one labelled *Grenade* always gets A, whatever its slot. Operator
+   rows — names starting with Test, Service, Volume or Select (Jurassic Park's
+   test-menu keys, Luigi's Mansion's Select Switch) — and `Button4` and up keep
+   what you bound. The manual route, for reference:
 2. In `UserProfiles\<Game>.xml`, bind the lightguns to the bridge mice. TP's
    controller page cannot capture left/right/middle for a binding and it
    overwrites hand edits, so edit the XML with TP closed:
@@ -143,7 +198,9 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
    | Trigger P1 | Bridge Mouse 1, `LeftButton` |
    | Reload P1 | Bridge Mouse 1, `RightButton` |
    | Grenades P1 | Bridge Mouse 1, `MiddleButton` |
-   | P2 Light Gun / Trigger / Reload / Grenades | same four on Bridge Mouse 2 |
+   | Start Button P1 | Bridge Mouse 1, `Button5` (gun Start) |
+   | Coin | Bridge Mouse 1, `Button4` (gun 1 Coin) |
+   | P2 Light Gun / Trigger / Reload / Grenades / Start | same on Bridge Mouse 2 |
 
    The device path looks like
    `\\?\HID#VID_1209&PID_0A11&MI_00#a&1b234567&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}`
@@ -158,33 +215,154 @@ inside a normal target. If a gun is much worse than that, redo 4b for that gun
 
 ## 6. DemulShooter
 
-DS matches devices by exact RawInput path and only at startup, so bind it with
-the script and start DS **after** the game window is up:
+DS matches devices by exact RawInput path and only at startup. In the wizard's
+Games page, set the DemulShooter folder and press **Bind to bridge**: it rewrites
+the P1/P2 paths in `config.ini` to the bridge mice (with a timestamped backup)
+and DS then shows `G'AIM'E / G'AIM'E Bridge Mouse 1/2`.
 
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File pico\gun_bridge\host\fix_demulshooter_paths.ps1
-```
-
-It rewrites the P1/P2 paths in `config.ini` to the bridge mice and DS then shows
-`G'AIM'E / G'AIM'E Bridge Mouse 1/2`.
+From then on the tray checks `config.ini` every time it starts and re-binds it
+if the bridge paths changed, so there is no launcher to run. Start DS **after**
+the game window is up, as usual.
 
 ## 7. The white border in games (optional but recommended)
 
 Games render at whatever aspect they like; a constant white frame gives you (and
 the gun's optical path) the same reference as the calibration screens. With
-TeknoParrot's ELF loader (Raw Thrills / Linux titles):
+TeknoParrot games, select the game in the wizard's Games page list and use
+**Install border**; the list's **Border** column shows each game's state.
+Where it goes depends on the game:
 
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\Install-ReshadeBorder.ps1
-```
+| game type | where ReShade goes | DLL |
+|---|---|---|
+| ElfLdr2 (Raw Thrills / Linux titles: Jurassic Park, Terminator) | `TeknoParrot\ElfLdr2\`, shared by every ElfLdr2 game | 32-bit, `opengl32.dll` |
+| Windows games (Luigi's Mansion, `exe\x64\VACUUM.exe`) | next to the game's exe | 32/64-bit like the exe; `dxgi.dll` for Direct3D 10/11/12, `d3d9.dll`, or `opengl32.dll` — read from the DLLs the exe (or a DLL beside it) loads |
 
-It installs ReShade as an OpenGL proxy next to `ElfLdr2\BudgieLoader.exe` with a
-32 px border that is applied on launch — no Home key, no overlay. It covers every
-ElfLdr2 game. `-Uninstall` removes it; `-BorderPx 24` changes the thickness
-(then change `ScreenBorder.Pixels` in the tray source to match). See
+Protected exes hide the API: Luigi's Mansion's `VACUUM.exe` is packed by
+Capcom (its code sections are empty on disk and unpacked at runtime), so it is
+treated as Direct3D 11 because its stub loads the Direct3D shader compiler
+`d3dcompiler_46.dll` — shown as *inferred*. When nothing can be told, **Install
+border** asks for the API (Direct3D 10/11/12, Direct3D 9, OpenGL) and remembers
+it for that exe in `setup.json`; if the border then doesn't show in the game,
+**Remove** and pick another. A profile whose game path is not a Windows `.exe`
+shows `n/a` with the reason. Download the standard ReShade from reshade.me (not
+the add-on build) and pick the `ReShade_Setup_*.exe` when asked: the wizard
+takes `ReShade32.dll` out of it, so the ReShade installer never has to run.
+A `ReShade32.dll` picked directly works too. ReShade itself is not shipped with
+the tray; reshade.me asks for the binaries not to be redistributed.
+
+The border is exactly as thick on screen as the tray's own (`ScreenBorder.Pixels`,
+32 px) whatever resolution the game renders at: the preset stores it as a
+fraction of the screen, rewritten for the current screen every time the tray
+starts. It is applied on launch — no Home key, no overlay.
+
+**Shrink the game inside the border** (Games page, on by default): the game
+picture is scaled into the area inside the frame, so the frame covers nothing,
+and the tray maps the aim into that smaller area while that game is in front
+(the bridge log says `streaming: VACUUM (fit inside border)`). Off: the frame
+is drawn over the picture's edges, which hides a little of each edge. Neither
+needs recalibration — the gun sees the same frame either way.
+**Turn off / Turn on** swaps it out and back in without reinstalling (from the
+next game launch): off renames our `opengl32.dll` to `opengl32.dll.gaime-off`,
+so the game uses the normal Windows OpenGL again — stock `ElfLdr2` has no
+`opengl32.dll` of its own. If another `opengl32.dll` was already there, Install
+keeps it as `opengl32.dll.gaime-orig` and it is back in place whenever the border
+is off. **Remove** takes everything out and restores that original. See
 `docs/white-border.md`.
 
-## 8. Troubleshooting
+## 8. Auto-start the game (optional)
+
+The wizard's **Auto-start** page turns the PC into a cabinet: after a reboot it
+comes back to the game by itself.
+
+1. Pick the **Game** (a TeknoParrot profile, bound with **Bind to guns**).
+2. Tick **Launch this game when the tray starts** and **Start it again if it
+   closes**.
+3. Tick **Start GaimeTray with Windows**.
+4. Fix the rows under *Coming back after a reboot*:
+   - **Automatic sign-in** — without it a reboot stops at the sign-in screen
+     and nothing starts. **Sign-in settings** opens `netplwiz`: untick *Users
+     must enter a user name and password*. If that box is missing, first turn
+     off *only allow Windows Hello sign-in* in Settings → Accounts → Sign-in
+     options. The wizard never stores your password itself.
+   - **Sleep / screen off** — **Never sleep** sets both to never while plugged
+     in (a sleeping PC drops the guns).
+
+What happens at start: the tray stays in the task tray (its window would take
+the foreground from the game), waits up to 20 seconds for the bridge and one
+gun (a second gun attaches by itself), and does not launch while a gun needs
+calibration or the setup wizard is open (a balloon says why). **Start game** in
+the main window skips the wait and only warns about calibration. Then it runs
+`TeknoParrotUi.exe --profile=<Game>.xml`, brings the game to the front for its
+first 30 s (the bridge only streams to a foreground game), and watches the game
+process (`BudgieLoader` for ElfLdr2 games). If the game closes, it is started
+again 5 s later; three exits within 2 minutes of their launch in a row stop the
+restarts and show the window instead.
+
+**Starting by hand:** the main window has a **Game** bar under the header:
+pick the game, **Start game** runs it through the same steps (wait for the
+guns, check calibration, keep it in front, restart it if it closes), **Stop
+game** closes it. The picked game is the same setting as the Auto-start page.
+
+**Leaving the game:** hold **Start + Coin** on either gun for 5 seconds (the
+time is set on the page). The game closes, auto-restart stops for this session
+and the tray window opens. The tray menu has **Stop auto-restart** (leaves the
+game running) and **Start game now**. The next start of the tray resumes
+auto-start. Holding Start + Coin also sends both buttons to the game for those
+seconds.
+
+## 8a. Using the tray with the guns only
+
+While a GaimeTray window is in front (main window, setup wizard), each gun
+shows a crosshair at its calibrated aim (green P1, blue P2) and the trigger
+clicks what is under it: buttons, checkboxes, list rows, tabs, the wizard's
+page list; a drop-down steps to its next choice per pull. Before a gun has a
+host calibration the crosshair follows its own Box Cal range. Windows' own
+touch taps from the guns are ignored in tray windows (they landed in the wrong
+place — that is what hit the grid's Cancel button). In the calibration grid,
+the gun's **Start** cancels, **V** toggles the border (not B: the gun's B
+button sends B), and Cancel sits between the left and middle targets.
+
+## 8b. RetroBat (optional)
+
+GaimeTray can start RetroBat instead of one game; RetroBat lists and launches
+the gun games, and the tray keeps turning the guns into the bridge mice.
+
+1. Games page: **Bind to guns** for each TeknoParrot game you want.
+2. Wizard → **RetroBat** page: set its folder (**Find**), then **Set up RetroBat
+   for my bound games**. For every game bound to the guns it:
+   - links `RetroBat\emulators\teknoparrot` to your TeknoParrot (one install:
+     same profiles, bindings and borders);
+   - lists the game in RetroBat as `roms\teknoparrot\<Name>.teknoparrot`, a
+     link to the game's folder (no copy; `<Name>` is TeknoParrot's metadata
+     name, e.g. `JurassicPark`, `LuigisMansion`); links it made for games no
+     longer bound are removed, real folders are never touched;
+   - puts the game's process on the bridge list;
+   - adds *GaimeTray Setup* under Windows (opens this wizard in front of
+     RetroBat; RetroBat waits until it closes).
+   The table shows each game's RetroBat entry, guns and border. Binding a game
+   later on the Games page runs the same step by itself.
+3. In RetroBat, update the game lists. Only systems with games show, so you see
+   TeknoParrot (and Windows); hide others under its UI settings.
+4. Pick **RetroBat (frontend)** on the Auto-start page or in the main window's
+   game bar. The tray watches `emulationstation`: if RetroBat closes it is
+   started again; Start + Coin on a gun closes it.
+
+**Other systems** (MAME, Dolphin…): **Add emulators to bridge** on the same
+page lets the guns aim in RetroBat's other emulators; those still need their
+own gun settings.
+
+Not known yet (test on the rig): RetroBat "automatically configures" controls
+for TeknoParrot games and guns, and may rewrite the gun rows in the profiles
+when it launches a game — if a game ignores the guns after a RetroBat launch,
+run **Bind to guns** again and look for RetroBat's per-game option to keep the
+existing controls. RetroBat's own Sinden-style border is meant for Sinden
+guns; with our ReShade border installed, leave RetroBat's off to avoid two.
+
+**Touchscreen off?** The main window's Log tab and the tray menu have **Fix
+touchscreen**: it turns Windows touch back on (`TouchGate = 1`) and offers to
+sign out.
+
+## 9. Troubleshooting
 
 | Symptom | Cause |
 |---|---|
@@ -192,6 +370,8 @@ ElfLdr2 game. `-Uninstall` removes it; `-BorderPx 24` changes the thickness
 | Cards appear but aim never moves | the gun is not reporting the digitizer; check Device Manager for the HID digitizer interface |
 | Aim works in the gallery, not in the game | the game is reading a different device. TP: P1/P2 Light Gun must be the bridge mice, Input API = RawInput |
 | Gun 2 does nothing in a game | its TP bindings are unbound (see §5.4), or the game only supports one player |
+| The mouse can't click while a gun points at the screen (calibration, wizard) | Windows moves the cursor wherever a gun points (it treats the gun as a touchscreen). Calibrate without the mouse: on the Calibrate page press **Start** on a gun. `TouchGate = 0` (System check → **Turn touch off**) also stops it, but turns off touch for **every** touchscreen, including a laptop's or Surface's own — undo with **Turn touch back on** and a sign-out. |
+| A game takes long to start from the tray | the Log tab has `auto-start: … (+N.N s)` lines for each stage. **Start game** launches at once; auto-start at boot waits up to 20 s for the bridge and one gun. |
 | Cursor jumps around while nothing is running | that is the gun's digitizer moving the Windows cursor; the tray only pins it while a gun is locked. The bridge does not stream on the desktop. |
 | Aim drifts over a session | IMU drift with the camera path not locking; redo the PC-side grid (§4b) and check the border is on |
 | Aim is scaled/wrong after redoing Box Cal | the PC-side grid was not redone. Order matters (§4) |
@@ -206,7 +386,9 @@ Logs: `logs\tray-<date>.log` (guns, calibration, shots, noise),
 ```
 GaimeTray.exe            tray app (this is the only program to run)
 guns.json                serial -> player 1/2
-calibrations/            cal_<serial>.json, the PC-side calibration
+setup.json               setup wizard: TeknoParrot / DemulShooter folders, finished flag
+calibrations/            cal_<serial>.json, the PC-side calibration;
+                         boxcal_<serial>.json, when this PC last sent a Box Cal
 logs/                    tray-<date>.log, bridge-<date>.log
 latch-ms.txt             optional: press-latch before the trigger, ms (absent = 0)
 boxcal-headroom.txt      optional: Box Cal headroom percent (absent = 0)

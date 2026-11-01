@@ -68,7 +68,7 @@ Gun 1 — the cover may be part of why that loop shows up there.
 for A/B noise measurements only:
 
 - gallery: `V` key, or the gun's `C` button;
-- calibration window: `B`;
+- calibration window: `V` (not `B`: the gun's B button sends B);
 - each toggle is logged (`gallery [...]: border ON/OFF`) so the noise figures
   before and after are comparable.
 

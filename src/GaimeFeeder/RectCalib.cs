@@ -17,6 +17,13 @@ namespace GaimeFeeder
         public int ScreenW { get; set; }
         public int ScreenH { get; set; }
         public bool InvertY { get; set; } = false;
+        // When the grid was saved and how well it fit (setup wizard, CalStatus).
+        // Absent in files written before these existed.
+        public DateTime? SavedUtc { get; set; }
+        public string FitInfo { get; set; }
+        // Border drawn while the grid was taken; null in older files (made
+        // with the border on, the default since 2026-10-24).
+        public bool? Border { get; set; }
 
         public (double sx, double sy, bool inside) Map(int rawX, int rawY)
         {
@@ -40,9 +47,12 @@ namespace GaimeFeeder
         public bool IsValid =>
             (RawMaxX - RawMinX) >= 500 && (RawMaxY - RawMinY) >= 500;
 
-        public void Save(string serial) =>
+        public void Save(string serial)
+        {
+            SavedUtc = DateTime.UtcNow;
             File.WriteAllText(Path(serial), JsonSerializer.Serialize(this,
                 new JsonSerializerOptions { WriteIndented = true }));
+        }
 
         public static RectCalib Load(string serial)
         {

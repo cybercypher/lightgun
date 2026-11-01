@@ -32,7 +32,10 @@ namespace GaimeFeeder
             return map;
         }
 
-        static void Save(Dictionary<string, int> map)
+        // Serial -> player as stored, without adding anything.
+        public static Dictionary<string, int> Read() => Load(new string[0]);
+
+        public static void Save(Dictionary<string, int> map)
         {
             var obj = new Dictionary<string, Dictionary<string, int>> { ["guns"] = map };
             File.WriteAllText(Path(), JsonSerializer.Serialize(obj,

@@ -35,6 +35,9 @@ namespace GaimeFeeder
         public CalibrationWindow(string display, Func<(int x, int y)> latestRaw)
         {
             _display = display; _latestRaw = latestRaw;
+            // Always start from the configured border; a test toggle left over
+            // from the gallery must not end up in a calibration.
+            ScreenBorder.Enabled = ScreenBorder.Mode;
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             TopMost = true;
@@ -66,8 +69,12 @@ namespace GaimeFeeder
         }
 
         // Keep the instructions and Cancel button clear of the reference border
-        // and the targets: instructions along the bottom edge, Cancel at the
-        // top edge. The grid is W/14 in from every edge, so both stay clear.
+        // and the targets: instructions along the bottom edge, Cancel on the
+        // top edge in the gap between the left and middle columns (the grid's
+        // columns are at W/14, W/2 and 13W/14). At top centre it sat right
+        // above the top-middle target and a shot there hit it (Windows turns a
+        // gun's trigger into a touch tap; guns no longer click tray windows,
+        // see GunTouchFilter, but the button stays out of the way).
         void LayoutChrome()
         {
             if (_label == null || _cancel == null) return;
@@ -75,7 +82,7 @@ namespace GaimeFeeder
             int t = ScreenBorder.Thickness(w, h);
             int lw = Math.Min(w, Math.Max(320, (int)(w * 0.62)));
             _label.Bounds = new Rectangle((w - lw) / 2, h - t - 78, lw, 64);
-            _cancel.Bounds = new Rectangle((w - 160) / 2, t + 16, 160, 40);
+            _cancel.Bounds = new Rectangle((int)(w * 0.29) - 80, t + 16, 160, 40);
         }
 
         protected override void OnResize(EventArgs e)
@@ -86,10 +93,14 @@ namespace GaimeFeeder
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); return true; }
+            // Esc, or the gun's Start button (its keyboard interface sends Q),
+            // cancels — so a gun-only setup can leave the grid too.
+            if (keyData == Keys.Escape || keyData == Keys.Q) { DialogResult = DialogResult.Cancel; Close(); return true; }
             // Same shared switch as the tray gallery: the gun must see the same
-            // reference while calibrating as it will in play.
-            if (keyData == Keys.B)
+            // reference while calibrating as it will in play. V, not B: the
+            // gun's B button sends B, and one press of it mid-grid toggled the
+            // border under the calibration.
+            if (keyData == Keys.V)
             {
                 ScreenBorder.Enabled = !ScreenBorder.Enabled;
                 UpdateLabel();
@@ -119,7 +130,7 @@ namespace GaimeFeeder
         void UpdateLabel()
         {
             string where = $"target {_idx + 1}/{_targets.Count}, pull {_pull + 1}/{PullsPerTarget}";
-            string tail = $"   (B = border {(ScreenBorder.Enabled ? "ON" : "OFF")}, ESC cancels)";
+            string tail = $"   (V = border {(ScreenBorder.Enabled ? "ON" : "OFF")}, ESC or gun Start cancels)";
             _label.Text = _serial == null
                 ? $"Aim EITHER gun at {where}{tail}"
                 : $"{_display} : aim at {where}{tail}";

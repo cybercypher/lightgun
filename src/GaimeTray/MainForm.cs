@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using GaimeFeeder;
 
 namespace GaimeTray
@@ -24,6 +24,8 @@ namespace GaimeTray
         Button _capBtn;
         readonly Label _capResult = new Label();
         readonly Timer _tick = new Timer();
+        ComboBox _game;
+        Label _gameState;
         bool _wasFeeding;
 
         static readonly Color Bg = Color.FromArgb(24, 25, 28);
@@ -36,8 +38,8 @@ namespace GaimeTray
         {
             _eng = eng;
             Text = "G'AIM'E Tray";
-            Size = new Size(800, 600);
-            MinimumSize = new Size(760, 540);
+            Size = new Size(800, 644);
+            MinimumSize = new Size(760, 584);
             BackColor = Bg;
             ForeColor = Fg;
             Font = new Font("Segoe UI", 9);
@@ -79,9 +81,9 @@ namespace GaimeTray
             {
                 Text = "Start with Windows", Location = new Point(462, 16),
                 AutoSize = true, ForeColor = Dim, BackColor = Panel,
-                Checked = IsAutostart(),
+                Checked = Autostart.IsOn(),
             };
-            _autostart.CheckedChanged += (s, e) => SetAutostart(_autostart.Checked);
+            _autostart.CheckedChanged += (s, e) => Autostart.Set(_autostart.Checked);
             var trayNote = new Label
             {
                 Text = "closes to tray · F12 recalibrates",
@@ -90,6 +92,7 @@ namespace GaimeTray
             };
             head.Controls.AddRange(new Control[] { title, _statePill, _startStop, _testBtn, _autostart, trayNote });
             Controls.Add(head);
+            Controls.Add(MkGameBar());
 
             // gun cards
             var cards = new FlowLayoutPanel
@@ -126,6 +129,76 @@ namespace GaimeTray
             RefreshChrome();
         }
 
+        // Game bar: pick a TeknoParrot game, start it through the same
+        // controller as auto-start (waits for the guns, checks calibration,
+        // keeps the game in front, restarts it, Start + Coin exits).
+        Panel MkGameBar()
+        {
+            var bar = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Bg };
+            bar.Controls.Add(new Label
+            {
+                Text = "Game", Location = new Point(14, 14), AutoSize = true,
+                ForeColor = Fg, BackColor = Bg, Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            });
+            _game = new ComboBox
+            {
+                Location = new Point(62, 10), Size = new Size(260, 24), DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Panel, ForeColor = Fg, FlatStyle = FlatStyle.Flat,
+            };
+            _game.DropDown += (s, e) => FillGames();
+            _game.SelectionChangeCommitted += (s, e) =>
+            {
+                if (!(_game.SelectedItem is GameItem g)) return;
+                var cfg = SetupConfig.Load();
+                cfg.AutoLaunchProfile = g.FileName;
+                try { cfg.Save(); } catch { }
+            };
+            var start = MkBtn("Start game", 332, 8);
+            start.Size = new Size(100, 28);
+            start.Click += (s, e) =>
+            {
+                if (_game.SelectedItem == null)
+                {
+                    MessageBox.Show(this, "Pick a game first. Games come from TeknoParrot's profiles (set the folder in the setup wizard).",
+                        "Start game", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                Kiosk.Instance?.StartNow();
+            };
+            var stop = MkBtn("Stop game", 438, 8);
+            stop.Size = new Size(100, 28);
+            stop.Click += (s, e) => Kiosk.Instance?.Stop("main window", true);
+            new ToolTip().SetToolTip(stop, "Close the game and stop restarting it (or hold Start + Coin on a gun)");
+            _gameState = new Label
+            {
+                Location = new Point(548, 14), Size = new Size(230, 20), AutoEllipsis = true,
+                ForeColor = Dim, BackColor = Bg,
+            };
+            bar.Controls.AddRange(new Control[] { _game, start, stop, _gameState });
+            FillGames();
+            return bar;
+        }
+
+        void FillGames()
+        {
+            var cfg = SetupConfig.Load();
+            string keep = (_game.SelectedItem as GameItem)?.FileName ?? cfg.AutoLaunchProfile;
+            _game.Items.Clear();
+            if (RetroBat.Valid(cfg.RetroBatDir)) _game.Items.Add(new GameItem(null));
+            foreach (var p in TeknoParrotProfiles.Scan(cfg.TeknoParrotDir))
+                _game.Items.Add(new GameItem(p));
+            _game.SelectedItem = _game.Items.Cast<GameItem>().FirstOrDefault(i =>
+                string.Equals(i.FileName, keep, StringComparison.OrdinalIgnoreCase));
+        }
+
+        sealed class GameItem
+        {
+            readonly TeknoParrotProfiles.Profile _p;
+            public GameItem(TeknoParrotProfiles.Profile p) { _p = p; }
+            public string FileName => _p == null ? SetupConfig.RetroBatTarget : Path.GetFileName(_p.File);
+            public override string ToString() => _p == null ? "RetroBat (frontend)" : _p.Game + (_p.P1 && _p.P2 ? "" : "  (guns not bound)");
+        }
+
         TabPage MkLogPage()
         {
             var p = new TabPage("Log") { BackColor = Bg };
@@ -149,9 +222,40 @@ namespace GaimeTray
             };
             new ToolTip().SetToolTip(snBtn,
                 "Write a gun's on-device serial: plug in ONE gun, type 11111 or 22222, Write, replug");
-            bar.Controls.AddRange(new Control[] { clear, folder, snBtn });
+            var setupBtn = MkBtn("Setup wizard", 480, 4);
+            setupBtn.Click += (s, e) => SetupWizard.Open(_eng);
+            new ToolTip().SetToolTip(setupBtn,
+                "Step-by-step: system check, gun serials and players, calibration order, game bindings");
+            var touchBtn = MkBtn("Fix touchscreen", 620, 4);
+            touchBtn.Click += (s, e) => FixTouch();
+            new ToolTip().SetToolTip(touchBtn, "Turns Windows touch input back on (TouchGate = 1) if it was turned off; then sign out and in");
+            bar.Controls.AddRange(new Control[] { clear, folder, snBtn, setupBtn, touchBtn });
             p.Controls.AddRange(new Control[] { _log, bar });
             return p;
+        }
+
+        // TouchGate = 0 turns off touch for every touchscreen (a Surface's own
+        // screen included); this puts it back.
+        public void FixTouch()
+        {
+            if (!SystemChecks.TouchGateOff())
+            {
+                MessageBox.Show(this, "Touch input is already on in Windows' settings. If the touchscreen still doesn't respond, sign out and back in.",
+                    "Fix touchscreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            try
+            {
+                SystemChecks.SetTouchGate(false);
+                _eng.Note("touch input turned back on (TouchGate = 1); takes effect after sign-out");
+                if (MessageBox.Show(this, "Touch input is turned back on. Windows applies it after you sign out and back in.\r\n\r\nSign out now?",
+                        "Fix touchscreen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    Process.Start(new ProcessStartInfo("shutdown.exe", "/l") { UseShellExecute = false, CreateNoWindow = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Could not change the setting: " + ex.Message, "Fix touchscreen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         TabPage MkCapPage()
@@ -233,6 +337,12 @@ namespace GaimeTray
 
         void RefreshLive()
         {
+            var k = Kiosk.Instance;
+            if (_gameState != null && k != null)
+            {
+                string st = k.Active ? k.Status : "not running";
+                if (_gameState.Text != st) _gameState.Text = st;
+            }
             var snap = _eng.Snapshot();
             if (snap.Count > 0) _c1.Show(snap[0]);
             if (snap.Count > 1) _c2.Show(snap[1]);
@@ -296,40 +406,6 @@ namespace GaimeTray
         {
             Directory.CreateDirectory(AppPaths.Logs);
             return AppPaths.Logs;
-        }
-
-        static bool IsAutostart()
-        {
-            try
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", false))
-                    return k?.GetValue("GaimeTray") != null;
-            }
-            catch { return false; }
-        }
-
-        static void SetAutostart(bool on)
-        {
-            try
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-                {
-                    if (k == null) return;
-                    if (on)
-                    {
-                        // Point at the windowed apphost exe, NOT dotnet.exe:
-                        // dotnet <dll> opens a console window.
-                        string exe = Environment.ProcessPath;
-                        if (exe.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                            exe = Path.ChangeExtension(exe, ".exe");
-                        k.SetValue("GaimeTray", "\"" + exe + "\"");
-                    }
-                    else k.DeleteValue("GaimeTray", false);
-                }
-            }
-            catch { }
         }
     }
 }

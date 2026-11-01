@@ -3,6 +3,7 @@
 logs/
 
 # build output
+artifacts/
 src/GaimeFeeder/bin/
 src/GaimeFeeder/obj/
 src/GaimeTray/bin/
@@ -13,3 +14,6 @@ src/GaimeTray/obj/
 
 # local rig notes - never published
 HANDOFF.md
+
+# per-PC setup wizard state (emulator folders)
+setup.json

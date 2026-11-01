@@ -26,6 +26,29 @@
     <Compile Include="..\GaimeFeeder\ScreenBorder.cs" Link="Engine\ScreenBorder.cs" />
     <Compile Include="..\GaimeFeeder\CalibrationWindow.cs" Link="Engine\CalibrationWindow.cs" />
     <Compile Include="..\GaimeFeeder\SnWriterForm.cs" Link="Engine\SnWriterForm.cs" />
+    <Compile Include="..\GaimeFeeder\SetupConfig.cs" Link="Engine\SetupConfig.cs" />
+    <Compile Include="..\GaimeFeeder\BridgeDevices.cs" Link="Engine\BridgeDevices.cs" />
+    <Compile Include="..\GaimeFeeder\CalStatus.cs" Link="Engine\CalStatus.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- White border shader + preset for the setup wizard's ReShade install. -->
+    <!-- Kept as loose files (not inside a single-file exe): the wizard copies them into ElfLdr2. -->
+    <Content Include="..\..\tools\reshade\*" Link="reshade\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- Bridge firmware for the wizard's Flash bridge button: a fresh build if
+         there is one, else the prebuilt image kept in git (pico/gun_bridge/prebuilt). -->
+    <Content Include="..\..\pico\gun_bridge\build\gun_bridge.uf2" Condition="Exists('..\..\pico\gun_bridge\build\gun_bridge.uf2')"
+             Link="gun_bridge.uf2" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\..\pico\gun_bridge\prebuilt\gun_bridge.uf2"
+             Condition="!Exists('..\..\pico\gun_bridge\build\gun_bridge.uf2') And Exists('..\..\pico\gun_bridge\prebuilt\gun_bridge.uf2')"
+             Link="gun_bridge.uf2" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <!-- Release profile (Properties\PublishProfiles\win-x64.pubxml) zips the publish folder. -->
+  <Target Name="ZipRelease" AfterTargets="Publish" Condition="'$(ZipRelease)' == 'true'">
+    <ZipDirectory SourceDirectory="$(PublishDir)" DestinationFile="$(PublishDir)..\GaimeTray-win-x64.zip" Overwrite="true" />
+    <Message Importance="high" Text="Release zip: $([System.IO.Path]::GetFullPath('$(PublishDir)..\GaimeTray-win-x64.zip'))" />
+  </Target>
 
 </Project>
